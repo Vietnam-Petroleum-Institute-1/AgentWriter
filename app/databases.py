@@ -11,7 +11,7 @@ HOST = os.getenv('DB_HOST')
 
 def connect_db():
     return psycopg2.connect(
-        dbname="pvpower",
+        dbname="agent_writer",
         user="phuongpd",
         password="vdkvn22.05",
         host=HOST,
