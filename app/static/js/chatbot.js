@@ -308,7 +308,7 @@ function sendMessage(message = null) {
       messageText
     )}&user_id=${encodeURIComponent(user_id)}&session_id=${encodeURIComponent(
       session_id
-    )}&conversation_id=${encodeURIComponent(conversation_id)}`
+    )}&conversation_id=${encodeURIComponent(conversation_id)}&file_id=${encodeURIComponent(file_id)}file_name=${encodeURIComponent(file_name)}&file_type=${encodeURIComponent(file_type)}`
   )
     .then((response) => response.json())
     .then((data) => {

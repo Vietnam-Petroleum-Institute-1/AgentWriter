@@ -24,10 +24,6 @@ load_dotenv()
 
 CHATBOT_APIKEY = os.getenv('CHATBOT_APIKEY')
 CHATBOT_URL = os.getenv('CHATBOT_URL')
-LDAP_SERVER = os.getenv('LDAP_SERVER')
-LDAP_USER = os.getenv('LDAP_USER')
-LDAP_PASSWORD = os.getenv('LDAP_PASSWORD')
-BASE_DN = os.getenv('BASE_DN')
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 def decode_token(token):
@@ -93,37 +89,37 @@ def add_security_headers(response):
     
     return response
 
-def authenticate_user(username, password):
-    try:
-        # Nếu username chứa domain (vd: pv-power\ldap_admin), tách ra
-        if '\\' in username:
-            username, domain = username.split('\\', 1)
+# def authenticate_user(username, password):
+#     try:
+#         # Nếu username chứa domain (vd: pv-power\ldap_admin), tách ra
+#         if '\\' in username:
+#             username, domain = username.split('\\', 1)
         
-        if '@' in username:
-            username, domain = username.split('@', 1)
+#         if '@' in username:
+#             username, domain = username.split('@', 1)
 
-        logging.debug(f"Authenticating user: {username}")
+#         logging.debug(f"Authenticating user: {username}")
 
-        server = Server(LDAP_SERVER, get_info=ALL)
-        conn = Connection(server, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True)
+#         server = Server(LDAP_SERVER, get_info=ALL)
+#         conn = Connection(server, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True)
         
-        # Tìm kiếm DN của người dùng trong tất cả các OUs
-        search_filter = f"(sAMAccountName={username})"
-        conn.search(search_base=BASE_DN, search_filter=search_filter, search_scope=SUBTREE, attributes=['distinguishedName'])
+#         # Tìm kiếm DN của người dùng trong tất cả các OUs
+#         search_filter = f"(sAMAccountName={username})"
+#         conn.search(search_base=BASE_DN, search_filter=search_filter, search_scope=SUBTREE, attributes=['distinguishedName'])
         
-        if not conn.entries:
-            logging.debug("User DN not found.")
-            return False, 'Người dùng không tồn tại.'
+#         if not conn.entries:
+#             logging.debug("User DN not found.")
+#             return False, 'Người dùng không tồn tại.'
 
-        user_dn = conn.entries[0].distinguishedName.value
+#         user_dn = conn.entries[0].distinguishedName.value
         
-        # Thử xác thực người dùng với DN và mật khẩu
-        user_conn = Connection(server, user=user_dn, password=password, auto_bind=True)
-        logging.debug(f"User {username} authenticated successfully.")
-        return True, 'Đăng nhập thành công!'
-    except Exception as e:
-        logging.error(f"Lỗi LDAP: {str(e)}")
-        return False, f'Lỗi LDAP: {str(e)}'
+#         # Thử xác thực người dùng với DN và mật khẩu
+#         user_conn = Connection(server, user=user_dn, password=password, auto_bind=True)
+#         logging.debug(f"User {username} authenticated successfully.")
+#         return True, 'Đăng nhập thành công!'
+#     except Exception as e:
+#         logging.error(f"Lỗi LDAP: {str(e)}")
+#         return False, f'Lỗi LDAP: {str(e)}'
 
 @app.route('/')
 def home():
@@ -165,21 +161,21 @@ def signin():
         if CHATBOT_URL == "http://157.66.46.53/v1":
             success = True
             message = "Thành Công!"
-        else:
-            success, message = authenticate_user(username, password)
-            conn_db = connect_db()
-            # if not user_exists(conn_db, username):
-            if conn_db:
-                logging.debug("Connected to the database successfully.")
-            else:
-                logging.error("Failed to connect to the database.")
-            logging.debug(f"Creating new user if not exist: {username}")
-            try:
-                logging.debug(f"Attempting to insert user: {username}")
-                insert_user(conn_db, username, username)
-                logging.debug(f"User {username} inserted successfully.")
-            except Exception as e:
-                logging.error(f"Error occurred in insert_user: {str(e)}")
+        # else:
+        #     success, message = authenticate_user(username, password)
+        #     conn_db = connect_db()
+        #     # if not user_exists(conn_db, username):
+        #     if conn_db:
+        #         logging.debug("Connected to the database successfully.")
+        #     else:
+        #         logging.error("Failed to connect to the database.")
+        #     logging.debug(f"Creating new user if not exist: {username}")
+        #     try:
+        #         logging.debug(f"Attempting to insert user: {username}")
+        #         insert_user(conn_db, username, username)
+        #         logging.debug(f"User {username} inserted successfully.")
+        #     except Exception as e:
+        #         logging.error(f"Error occurred in insert_user: {str(e)}")
 
         
         if success:
@@ -217,7 +213,11 @@ def api_message():
     user_message = request.args.get('text')
     session_id = request.args.get('session_id')
     conversation_id = request.args.get('conversation_id')
+    file_id = request.args.get('file_id')
+    file_name = request.args.get('file_name')
+    file_type = request.args.get('file_type')
 
+    file_id = json.loads(file_id)
     end_session(conn, user_id, session_id)
 
     if not user_message:
@@ -235,7 +235,11 @@ def api_message():
     }
 
     body = {
-        "inputs": {},
+        "inputs": {
+            "file_name": file_name,
+            "file_type": file_type,
+            "chunk_id": file_id
+        },
         "query": user_message,
         "response_mode": "blocking",
         "conversation_id": conversation_id if conversation_id else "",
