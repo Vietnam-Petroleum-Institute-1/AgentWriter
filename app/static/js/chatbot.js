@@ -2,54 +2,52 @@ let isConversationStarted = false;
 let isWaitingForBot = false; // New flag to indicate waiting for bot response
 let conversationIdPromise = null;
 let feedbackMessageId = null;
-
+let selectedFiles = []; // Mảng lưu trữ các tệp đã chọn
 
 window.onload = function () {
   console.log("Window loaded");
-    // Nếu không có token, kiểm tra user_id và session_id từ cookie
-    const user_id = getCookie("user_id");
-    const session_id = getCookie("session_id");
+  // Nếu không có token, kiểm tra user_id và session_id từ cookie
+  const user_id = getCookie("user_id");
+  const session_id = getCookie("session_id");
 
-    console.log("User ID:", user_id, "Session ID:", session_id);
+  console.log("User ID:", user_id, "Session ID:", session_id);
 
-    if (user_id && session_id) {
-      // Nếu có user_id và session_id, tiếp tục logic bình thường
-      fetch("/api/user_exist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ user_id }),
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          console.log("User existence check:", data);
-          if (data.result) {
-            conversationIdPromise = checkOrCreateSession(user_id, session_id);
-            loadTranscripts(user_id, session_id); // Load transcripts nếu có session_id
-          } else {
-            document.getElementById("chatMessages").innerHTML =
-              '<div class="message bot"><div class="message-content">Vui lòng đăng nhập để sử dụng trợ lý ảo</div></div>';
-            const chatInput = document.querySelector(".chat-input");
-            if (chatInput) {
-              chatInput.style.display = "none";
-            }
+  if (user_id && session_id) {
+    // Nếu có user_id và session_id, tiếp tục logic bình thường
+    fetch("/api/user_exist", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("User existence check:", data);
+        if (data.result) {
+          conversationIdPromise = checkOrCreateSession(user_id, session_id);
+          loadTranscripts(user_id, session_id); // Load transcripts nếu có session_id
+        } else {
+          document.getElementById("chatMessages").innerHTML =
+            '<div class="message bot"><div class="message-content">Vui lòng đăng nhập để sử dụng trợ lý ảo</div></div>';
+          const chatInput = document.querySelector(".chat-input");
+          if (chatInput) {
+            chatInput.style.display = "none";
           }
-        })
-        .catch((error) => {
-          console.error("Error:", error);
-        });
-    } else {
-      document.getElementById("chatMessages").innerHTML =
-        '<div class="message bot"><div class="message-content">Vui lòng đăng nhập để sử dụng trợ lý ảo</div></div>';
-      const chatInput = document.querySelector(".chat-input");
-      if (chatInput) {
-        chatInput.style.display = "none";
-      }
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+      });
+  } else {
+    document.getElementById("chatMessages").innerHTML =
+      '<div class="message bot"><div class="message-content">Vui lòng đăng nhập để sử dụng trợ lý ảo</div></div>';
+    const chatInput = document.querySelector(".chat-input");
+    if (chatInput) {
+      chatInput.style.display = "none";
     }
+  }
 };
-
-
 
 function loadTranscripts(user_id, session_id) {
   console.log("Loading transcripts");
@@ -84,13 +82,17 @@ function loadTranscripts(user_id, session_id) {
 
       // Kiểm tra nếu transcripts là một mảng
       if (Array.isArray(transcripts)) {
-        transcripts.forEach(transcript => {
+        transcripts.forEach((transcript) => {
           if (Array.isArray(transcript)) {
-            transcript.forEach(innerTranscript => {
+            transcript.forEach((innerTranscript) => {
               if (innerTranscript && innerTranscript.role) {
                 const role = innerTranscript.role.toLowerCase();
                 if (innerTranscript.text != "") {
-                  addMessageToChat(role, innerTranscript.text, innerTranscript.messageId || null);
+                  addMessageToChat(
+                    role,
+                    innerTranscript.text,
+                    innerTranscript.messageId || null
+                  );
                 }
               } else {
                 console.warn("Transcript item missing role:", innerTranscript);
@@ -98,7 +100,11 @@ function loadTranscripts(user_id, session_id) {
             });
           } else if (transcript && transcript.role) {
             const role = transcript.role.toLowerCase();
-            addMessageToChat(role, transcript.text, transcript.messageId || null);
+            addMessageToChat(
+              role,
+              transcript.text,
+              transcript.messageId || null
+            );
           } else {
             console.warn("Transcript item missing role:", transcript);
           }
@@ -112,13 +118,10 @@ function loadTranscripts(user_id, session_id) {
     });
 }
 
-
-
-
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(';').shift();
+  if (parts.length === 2) return parts.pop().split(";").shift();
   return null;
 }
 
@@ -211,7 +214,11 @@ function startConversation(user_id, session_id) {
       isConversationStarted = true;
       console.log("Conversation started, conversation_id:", conversation_id);
 
-      addMessageToChat("bot", "Xin chào, tôi có thể giúp gì bạn?", data.message_id);
+      addMessageToChat(
+        "bot",
+        "Xin chào, tôi có thể giúp gì bạn?",
+        data.message_id
+      );
 
       return conversation_id;
     })
@@ -276,7 +283,7 @@ function sendMessage(message = null) {
 
   const userInput = document.getElementById("userInput");
   const fileInput = document.getElementById("fileInput").files; // Lấy tất cả các files
-  
+
   if (!userInput && fileInput.length === 0) {
     alert("Vui lòng nhập câu hỏi hoặc chọn file!");
     return;
@@ -284,7 +291,7 @@ function sendMessage(message = null) {
 
   const formData = new FormData();
   formData.append("message", userInput);
-  
+
   // Thêm tất cả các files vào formData
   for (let i = 0; i < fileInput.length; i++) {
     formData.append("files[]", fileInput[i]);
@@ -293,7 +300,7 @@ function sendMessage(message = null) {
   if (messageText === "") {
     return;
   }
-  
+
   const user_id = getCookie("user_id");
   const session_id = getCookie("session_id");
   const conversation_id = sessionStorage.getItem("conversation_id");
@@ -313,8 +320,11 @@ function sendMessage(message = null) {
 
   const delayMessageTimeout = setTimeout(() => {
     removeWaitingBubble();
-    addMessageToChat("bot", "Chờ chút nhé, tôi đang tổng hợp lại câu trả lời cho bạn đây.");
-    addWaitingBubble()
+    addMessageToChat(
+      "bot",
+      "Chờ chút nhé, tôi đang tổng hợp lại câu trả lời cho bạn đây."
+    );
+    addWaitingBubble();
   }, 4000);
 
   fetch(
@@ -322,7 +332,11 @@ function sendMessage(message = null) {
       messageText
     )}&user_id=${encodeURIComponent(user_id)}&session_id=${encodeURIComponent(
       session_id
-    )}&conversation_id=${encodeURIComponent(conversation_id)}&file_id=${encodeURIComponent(file_id)}file_name=${encodeURIComponent(file_name)}&file_type=${encodeURIComponent(file_type)}`
+    )}&conversation_id=${encodeURIComponent(
+      conversation_id
+    )}&file_id=${encodeURIComponent(file_id)}file_name=${encodeURIComponent(
+      file_name
+    )}&file_type=${encodeURIComponent(file_type)}`
   )
     .then((response) => response.json())
     .then((data) => {
@@ -337,7 +351,10 @@ function sendMessage(message = null) {
       clearTimeout(delayMessageTimeout);
       console.error("Error:", error);
       removeWaitingBubble();
-      addMessageToChat("bot", "Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này.");
+      addMessageToChat(
+        "bot",
+        "Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này."
+      );
       isWaitingForBot = false;
     });
 }
@@ -348,10 +365,12 @@ function processBotResponse(result, messageId, messageText, user_id) {
   if (domainMatch) {
     const domain = `False Group ${domainMatch[1]}`;
 
-    const resultWithoutDomain = result.replace(/False Group (1|2|3|4) Doc$/, "").trim();
+    const resultWithoutDomain = result
+      .replace(/False Group (1|2|3|4) Doc$/, "")
+      .trim();
 
     addMessageToChat("bot", resultWithoutDomain, messageId);
-    
+
     uploadPendingFAQ(resultWithoutDomain, messageText, domain, user_id);
   } else if (result.match(/False/)) {
     const domain = `False`;
@@ -359,17 +378,14 @@ function processBotResponse(result, messageId, messageText, user_id) {
     const resultWithoutDomain = result.replace(/False/, "").trim();
 
     addMessageToChat("bot", resultWithoutDomain, messageId);
-    
+
     uploadPendingFAQ(resultWithoutDomain, messageText, domain, user_id);
   } else {
     const resultWithoutDomain = result.replace(/True/, "").trim();
 
     addMessageToChat("bot", resultWithoutDomain, messageId);
-
-    
   }
 }
-
 
 function uploadPendingFAQ(answer, question, domain, user_id) {
   fetch("/api/upload_pending_FAQ", {
@@ -423,7 +439,7 @@ function addMessageToChat(sender, message, messageId) {
     dislikeButton.innerHTML = '<i class="fas fa-thumbs-down"></i>';
     dislikeButton.onclick = () =>
       sendFeedback("dislike", messageId, messageElement);
-    
+
     // Container cho nút Copy với tooltip
     const copyButtonContainer = document.createElement("div");
     copyButtonContainer.classList.add("copy-button-container");
@@ -441,7 +457,6 @@ function addMessageToChat(sender, message, messageId) {
     copyTooltip.textContent = "Copy";
     copyButtonContainer.appendChild(copyTooltip);
 
-    
     feedbackButtons.appendChild(likeButton);
     feedbackButtons.appendChild(dislikeButton);
     feedbackButtons.appendChild(copyButtonContainer);
@@ -462,8 +477,6 @@ function copyToClipboard(text) {
   document.body.removeChild(textarea);
   alert("Copied to clipboard");
 }
-
-
 
 function addWaitingBubble() {
   removeWaitingBubble();
@@ -589,14 +602,13 @@ function sendFeedback(feedbackType, messageId, messageElement) {
   }
 }
 
-
 function showModal() {
   document.getElementById("feedbackModal").style.display = "block";
 }
 
 function closeModal() {
   document.getElementById("feedbackModal").style.display = "none";
-  
+
   // Kích hoạt lại các nút like và dislike khi modal bị đóng
   if (feedbackMessageId) {
     const messageElement = document.querySelector(
@@ -616,7 +628,6 @@ function closeModal() {
 
   feedbackMessageId = null; // Reset lại feedbackMessageId
 }
-
 
 function submitDislikeFeedback() {
   const feedbackText = document.getElementById("feedbackText").value;
@@ -650,8 +661,8 @@ function extractQuestionsFromResponse(response) {
 
 function showSuggestions(questions) {
   const suggestionsContainer = document.getElementById("suggestions-container");
-  suggestionsContainer.innerHTML = ''; // Xóa các gợi ý trước đó
-  suggestionsContainer.style.display = 'flex'; // Hiển thị lại container nếu nó bị ẩn
+  suggestionsContainer.innerHTML = ""; // Xóa các gợi ý trước đó
+  suggestionsContainer.style.display = "flex"; // Hiển thị lại container nếu nó bị ẩn
 
   questions.forEach((question, index) => {
     const suggestionButton = document.createElement("button");
@@ -673,6 +684,51 @@ function sendSuggestedQuestion(question) {
 
 function hideSuggestions() {
   const suggestionsContainer = document.getElementById("suggestions-container");
-  suggestionsContainer.innerHTML = ''; // Xóa toàn bộ các nút gợi ý
-  suggestionsContainer.style.display = 'none'; // Ẩn container
+  suggestionsContainer.innerHTML = ""; // Xóa toàn bộ các nút gợi ý
+  suggestionsContainer.style.display = "none"; // Ẩn container
+}
+
+function updateFileList() {
+  const fileList = document.getElementById("fileList");
+  fileList.innerHTML = ""; // Xóa danh sách tệp trước đó
+
+  selectedFiles.forEach((fileName, index) => {
+    const listItem = document.createElement("li");
+
+    // Tạo phần tử hiển thị tên tệp với giới hạn chiều dài
+    const fileNameSpan = document.createElement("span");
+    fileNameSpan.className = "file-name";
+    fileNameSpan.textContent =
+      fileName.length > 20 ? fileName.slice(0, 20) + "..." : fileName; // Giới hạn 20 ký tự
+
+    // Tạo nút xóa
+    const deleteButton = document.createElement("button");
+    deleteButton.textContent = "X";
+    deleteButton.className = "delete-button";
+    deleteButton.onclick = () => removeFile(index); // Gán sự kiện xóa cho nút
+
+    listItem.appendChild(fileNameSpan);
+    listItem.appendChild(deleteButton);
+    fileList.appendChild(listItem);
+  });
+}
+
+function removeFile(index) {
+  selectedFiles.splice(index, 1); // Xóa tệp từ mảng
+  updateFileList(); // Cập nhật danh sách hiển thị
+}
+
+function handleFileSelect(event) {
+  const fileList = document.getElementById("fileList");
+  // fileList.innerHTML = ""; // Clear previous file list
+
+  // Lưu các tệp mới vào mảng
+  for (const file of event.target.files) {
+    if (!selectedFiles.includes(file.name)) {
+      selectedFiles.push(file.name);
+    }
+  }
+
+  // Cập nhật danh sách hiển thị
+  updateFileList();
 }

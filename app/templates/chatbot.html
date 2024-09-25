@@ -8,6 +8,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
+
+  <div class="file-container">
+    <h3>Selected Files</h3>
+    <ul id="fileList" class="file-list"></ul>
+  </div>
+
+
   <div class="chat-container" id="chatContainer">
     <div class="chat-header">
       <img src="{{ url_for('static', filename='images/Logo_Petrovietnam.svg.png') }}" alt="Logo">
@@ -16,12 +23,11 @@
     <div class="chat-messages" id="chatMessages"></div>
     <div id="suggestions-container" class="suggestions-container"></div>
     <div class="chat-input">
-      <input type="file" id="fileInput" multiple />
-      <input type="text" id="userInput" placeholder="Xin mời bạn hỏi..." onkeypress="handleKeyPress(event)" />
+      <input type="file" id="fileInput" multiple onchange="handleFileSelect(event)" />      <input type="text" id="userInput" placeholder="Xin mời bạn hỏi..." onkeypress="handleKeyPress(event)" />
       <button id="sendButton" onclick="sendMessage()">Send</button>
     </div>
   </div>
-
+  </div>
   <div id="feedbackModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeModal()">&times;</span>
