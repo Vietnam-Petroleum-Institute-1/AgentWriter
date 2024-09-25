@@ -1,1 +1,5 @@
 __pycache__/
+.venv
+app/__pycache__/*.pyc
+app/__pycache__/app.cpython-311.pyc
+app/__pycache__/databases.cpython-311.pyc
