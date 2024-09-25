@@ -26,3 +26,7 @@ print(f"Generated token: {token}")
 
 token_decode = jwt.decode(token, "96fc0cc6-3531-435d-9279-368691964ed3", algorithms='HS256')
 print("decode:", token_decode)
+
+
+
+

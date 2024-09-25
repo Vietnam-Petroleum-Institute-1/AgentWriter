@@ -158,6 +158,8 @@ def signin():
     logging.debug("Rendering signin page.")
     return render_template('signin.html')
 
+import re
+
 def call_chat_messages_api_and_process_stream(user_message, user_id, file_name, file_type, file_id, conversation_id):
     headers = {
         'Authorization': f'Bearer {CHATBOT_APIKEY}',
@@ -177,58 +179,70 @@ def call_chat_messages_api_and_process_stream(user_message, user_id, file_name, 
     }
 
     try:
-        with requests.post(CHATBOT_URL, headers=headers, json=body, stream=True) as response:
+        url = f'{CHATBOT_URL}/chat-messages'
+        with requests.post(url, headers=headers, json=body, stream=True) as response:
             final_result = ""
             buffer = ""
             conversation_id = None
             message_id = None
 
             for chunk in response.iter_lines():
-                if chunk:
-                    chunk_str = chunk.decode('utf-8')
-                    buffer += chunk_str
+                # Bỏ qua các chunk rỗng
+                if not chunk:
+                    continue
 
-                    lines = buffer.split("\n")
-                    buffer = lines.pop()  # Giữ lại phần chưa hoàn chỉnh
+                # Giải mã chunk từ bytes thành string
+                chunk_str = chunk.decode('utf-8')
+                buffer += chunk_str
 
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("data:"):
-                            json_string = line.replace("data: ", "")
-                            if json_string == "[DONE]":
+                # Sử dụng regex để tách từng JSON object
+                json_blocks = re.split(r'(?<=\})\s*(?=data: {)', buffer)
+
+                # Gán phần còn lại của buffer chưa hoàn chỉnh
+                buffer = json_blocks.pop() if json_blocks else ""
+
+                for json_block in json_blocks:
+                    json_block = json_block.strip()
+                    if json_block.startswith("data:"):
+                        json_string = json_block.replace("data: ", "")
+                        try:
+                            json_data = json.loads(json_string)
+                            app.logger.debug(f"json_data: {json_data}")
+
+                            # Kiểm tra tín hiệu kết thúc stream
+                            if json_data.get("event") in ["tts_message_end", "message_end"]:
                                 return final_result, conversation_id, message_id  # Kết thúc stream
 
-                            try:
-                                json_data = json.loads(json_string)
-                                if "answer" in json_data:
-                                    final_result += json_data["answer"]
-                                if "conversation_id" in json_data:
-                                    conversation_id = json_data["conversation_id"]
-                                if "message_id" in json_data:
-                                    message_id = json_data["message_id"]
-                            except json.JSONDecodeError as e:
-                                print(f"Error parsing JSON: {e}")
+                            if "answer" in json_data:
+                                final_result += json_data["answer"]
+                            if "conversation_id" in json_data:
+                                conversation_id = json_data["conversation_id"]
+                            if "message_id" in json_data:
+                                message_id = json_data["message_id"]
+                        except json.JSONDecodeError as e:
+                            app.logger.error(f"Error parsing JSON: {e}")
 
             # Xử lý phần còn lại trong buffer khi kết thúc stream
             if buffer.startswith("data:"):
                 json_string = buffer.replace("data: ", "")
-                if json_string != "[DONE]":
-                    try:
-                        json_data = json.loads(json_string)
-                        if "answer" in json_data:
-                            final_result += json_data["answer"]
-                        if "conversation_id" in json_data:
-                            conversation_id = json_data["conversation_id"]
-                        if "message_id" in json_data:
-                            message_id = json_data["message_id"]
-                    except json.JSONDecodeError as e:
-                        print(f"Error parsing JSON: {e}")
+                try:
+                    json_data = json.loads(json_string)
+                    app.logger.debug(f"json_data (remaining buffer): {json_data}")
+                    if "answer" in json_data:
+                        final_result += json_data["answer"]
+                    if "conversation_id" in json_data:
+                        conversation_id = json_data["conversation_id"]
+                    if "message_id" in json_data:
+                        message_id = json_data["message_id"]
+                except json.JSONDecodeError as e:
+                    app.logger.error(f"Error parsing JSON (remaining buffer): {e}")
 
             return final_result, conversation_id, message_id
 
     except requests.RequestException as e:
-        print(f"Error calling the API: {e}")
+        app.logger.error(f"Error calling the API: {e}")
         return None, None, None
+
 
 
 @app.route('/api/message', methods=['GET'])
@@ -310,6 +324,8 @@ def start_conversation():
             "Xin chào", user_id, file_name, file_type, file_id, conversation_id
         )
 
+        app.logger.debug(f"conversation_id: {conversation_id}")
+
         if not result_answer:
             app.logger.error("Không nhận được phản hồi từ API chatbot.")
             return jsonify({"error": "Không nhận được phản hồi từ chatbot"}), 500
@@ -322,7 +338,7 @@ def start_conversation():
 
         # Lưu thông tin cuộc hội thoại vào cơ sở dữ liệu
         add_conversation(conn, conversation_id, session_id, user_id)
-        conversation(conn, message_id, session_id, user_id, input_token, result_answer, output_token, total_token, timestamp, conversation_id)
+        conversation(conn, message_id, session_id, user_id, "", input_token, result_answer, output_token, total_token, timestamp, conversation_id)
 
         conn.close()
 

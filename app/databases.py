@@ -81,17 +81,17 @@ def session_continue(conn, user_id):
     return session
 
 
-def conversation(conn, message_id, session_id, user_id, llm_type, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain):
+def conversation(conn, message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id):
     if not session_exists(conn, user_id, session_id):
         print(f"Session {session_id} does not exist.")
         return
     cur = conn.cursor()
-    print("all variables:", message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain)
+    print("all variables:", message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id)
     insert_conversation_query = """
-    INSERT INTO conversation_logs (message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    INSERT INTO conversation_logs (message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-    cur.execute(insert_conversation_query, (message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain))
+    cur.execute(insert_conversation_query, (message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id))
     print("Pass!")
     conn.commit()
     cur.close()
