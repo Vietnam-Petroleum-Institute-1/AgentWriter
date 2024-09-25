@@ -2,14 +2,14 @@ import jwt
 from datetime import datetime, timedelta
 
 # Thông tin cần mã hóa
-user_id = "chatbot"
+user_id = "phuongpd"
 secret_key = "secret"  # Khóa bí mật để mã hóa
 
 # Thời gian hiện tại
 now = datetime.utcnow()
-
+now = now + timedelta(hours=7)
 # Thời điểm hết hạn (11:00:00)
-expiration_time = datetime.combine(now.date(), datetime.min.time()) + timedelta(hours=24, minutes=40)
+expiration_time = now + timedelta(hours=1, minutes=0)
 exp_timestamp = expiration_time.timestamp()
 
 # Payload của token

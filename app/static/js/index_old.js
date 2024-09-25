@@ -53,8 +53,9 @@ function checkOrCreateSession(user_id, session_id) {
         document.getElementById("chatContainer").style.display = "flex";
         return getConversation(user_id, session_id); // Return the promise from getConversation
       } else if (data.result === 0) {
-        const start_time = new Date().toISOString();
-        const end_time = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const currentDate = new Date();
+        const start_time = new Date(currentDate.getTime() + 7 * 60 * 60 * 1000).toISOString();
+        const end_time = new Date(currentDate.getTime() + 7 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString();
         return createSession(user_id, session_id, start_time, end_time);
       } else {
         document.getElementById("chatMessages").innerHTML =

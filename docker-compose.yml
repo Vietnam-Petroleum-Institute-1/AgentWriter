@@ -8,14 +8,14 @@ services:
       - .:/app
     environment:
       FLASK_ENV: production
-      DATABASE_URL: postgres://phuongpd:vdkvn22.05@db:5432/pvpower
+      DATABASE_URL: postgres://phuongpd:vdkvn22.05@db:5432/agent_writer
     depends_on:
       - db
 
   db:
     image: postgres:13
     environment:
-      POSTGRES_DB: pvpower
+      POSTGRES_DB: agent_writer
       POSTGRES_USER: phuongpd
       POSTGRES_PASSWORD: vdkvn22.05
     volumes:
