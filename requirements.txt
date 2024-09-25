@@ -5,3 +5,4 @@ flask_cors
 psycopg2-binary
 python-dotenv
 pyjwt
+python-docx

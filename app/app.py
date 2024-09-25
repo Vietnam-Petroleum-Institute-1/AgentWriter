@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, make_response
 import requests
 import logging
-from databases import insert_file, get_file, delete_file, session_continue, connect_db, user_exists, end_session, session, session_exists, conversation, insert_user, get_message_lastest_timestamp, get_transcripts, add_conversation, get_conversation_id, write_feedback, upload_pending_FAQ, session_valid, error_logs
+from databases import insert_file, get_file, delete_file, session_continue, connect_db, user_exists, end_session, session, session_exists, conversation, insert_user, get_message_lastest_timestamp, get_transcripts, add_conversation, get_conversation_id, write_feedback, session_valid, error_logs
 import json
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 import os
 import uuid
 import jwt  # For token handling
+from werkzeug.utils import secure_filename
+from docx import Document  # Thư viện để đọc file DOCX
 
 
 app = Flask(__name__)
@@ -24,6 +26,7 @@ load_dotenv()
 CHATBOT_APIKEY = os.getenv('CHATBOT_APIKEY')
 CHATBOT_URL = os.getenv('CHATBOT_URL')
 SECRET_KEY = os.getenv('SECRET_KEY')
+API_KEY = os.getenv('API_KEY')
 
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Giới hạn kích thước file 16MB
@@ -476,18 +479,6 @@ def decode_unicode_escapes(string):
     unicode_escape_pattern = re.compile(r'\\u[0-9a-fA-F]{4}')
     return unicode_escape_pattern.sub(lambda m: chr(int(m.group(0)[2:], 16)), string)
 
-@app.route('/api/upload_pending_FAQ', methods=['POST'])
-def upload_pending_faq():
-    conn = connect_db()
-    data = request.json
-    question = data.get('question')
-    answer = data.get('answer')
-    domain = data.get('domain')
-    user_id = data.get('user_id')
-    upload_pending_FAQ(conn, question, answer, domain, user_id)
-    conn.close()
-    return jsonify({"result": "FAQ uploaded successfully"})
-
 @app.route('/embed')
 def embed():
     user_id = request.args.get('user_id')
@@ -505,8 +496,60 @@ def embed():
 
     return response
 
-from werkzeug.utils import secure_filename
-import os
+def call_upload_api(mime_type, content):
+    url = ''
+    
+    # Kiểm tra mime type và đặt URL tương ứng
+    if mime_type == 'csv':
+        url = f'{CHATBOT_URL}/datasets/18cb9306-32e8-487a-993c-586b2c563cc3/documents/59abce73-608a-459c-a47d-0d9276ea6b83/segments'
+    elif mime_type == 'docx':
+        url = f'{CHATBOT_URL}/datasets/0770fc48-186c-45a8-8a85-2f80abeb593a/documents/8a81cf1f-8dc1-42dc-88ac-5fe641604392/segments'
+    
+    if not url:
+        return None, 'Unsupported MIME type'
+    
+        # Dữ liệu gửi qua API
+    payload = {
+        "segment": {
+            "content": content,  # Nội dung được lấy từ file
+        }
+    }
+
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+        'Content-Type': 'application/json'
+    }
+
+    # Gửi request POST đến API
+    response = requests.post(url, headers=headers, json=payload)
+
+    # Kiểm tra nếu request thành công
+    if response.status_code == 200:
+        response_json = response.json()
+        # Trích xuất `index_node_hash`
+        if 'data' in response_json and len(response_json['data']) > 0:
+            index_node_hash = response_json['data'][0].get('index_node_hash', '')
+            return index_node_hash, None
+        return None, 'No data returned from API'
+    else:
+        return None, f'Failed to upload. Status code: {response.status_code}'
+
+# Đọc nội dung từ file CSV
+def extract_csv_content(file_path):
+    content = []
+    with open(file_path, newline='', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            content.append(','.join(row))  # Nối các cột của mỗi dòng thành chuỗi
+    return '\n'.join(content)  # Nối các dòng lại với nhau để tạo thành một chuỗi lớn
+
+# Đọc nội dung từ file DOCX
+def extract_docx_content(file_path):
+    doc = Document(file_path)
+    content = []
+    for paragraph in doc.paragraphs:
+        content.append(paragraph.text)  # Lấy mỗi đoạn văn bản từ file
+    return '\n'.join(content)  # Nối tất cả các đoạn văn bản lại với nhau
 
 @app.route('/api/upload_file', methods=['POST'])
 def upload_file():
@@ -525,12 +568,26 @@ def upload_file():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
 
+        # Trích xuất nội dung từ file dựa trên loại MIME type
+        content = ''
+        if mime_type == 'csv':
+            content = extract_csv_content(file_path)
+        elif mime_type == 'docx':
+            content = extract_docx_content(file_path)
+        else:
+            return jsonify({'error': 'Unsupported MIME type'}), 400
+
+        # Gọi API upload với nội dung trích xuất từ file
+        index_node_hash, error = call_upload_api(mime_type, content)
+        if error:
+            return jsonify({'error': error}), 400
+
         # Insert thông tin file vào cơ sở dữ liệu
         conn = connect_db()
-        insert_file(conn, user_id, session_id, conversation_id, filename, file_path, file_size, mime_type, created_by)
+        insert_file(conn, index_node_hash, user_id, session_id, conversation_id, filename, file_path, file_size, mime_type, created_by)
         conn.close()
 
-        return jsonify({'message': f'File {filename} uploaded successfully'}), 200
+        return jsonify({'message': f'File {filename} uploaded successfully', 'file_id': index_node_hash}), 200
 
     return jsonify({'error': 'No file uploaded'}), 400
 
