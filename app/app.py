@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, make_response
 import requests
 import logging
-from databases import session_continue, connect_db, user_exists, end_session, session, session_exists, conversation, insert_user, get_message_lastest_timestamp, get_transcripts, add_conversation, get_conversation_id, bot_id_exist, write_feedback, upload_pending_FAQ, session_valid, error_logs
+from databases import insert_file, get_file, delete_file, session_continue, connect_db, user_exists, end_session, session, session_exists, conversation, insert_user, get_message_lastest_timestamp, get_transcripts, add_conversation, get_conversation_id, write_feedback, upload_pending_FAQ, session_valid, error_logs
 import json
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -9,7 +9,6 @@ import re
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
-from ldap3 import Server, Connection, ALL, SUBTREE
 import uuid
 import jwt  # For token handling
 
@@ -25,6 +24,9 @@ load_dotenv()
 CHATBOT_APIKEY = os.getenv('CHATBOT_APIKEY')
 CHATBOT_URL = os.getenv('CHATBOT_URL')
 SECRET_KEY = os.getenv('SECRET_KEY')
+
+app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Giới hạn kích thước file 16MB
 
 def decode_token(token):
     try:
@@ -89,38 +91,6 @@ def add_security_headers(response):
     
     return response
 
-# def authenticate_user(username, password):
-#     try:
-#         # Nếu username chứa domain (vd: pv-power\ldap_admin), tách ra
-#         if '\\' in username:
-#             username, domain = username.split('\\', 1)
-        
-#         if '@' in username:
-#             username, domain = username.split('@', 1)
-
-#         logging.debug(f"Authenticating user: {username}")
-
-#         server = Server(LDAP_SERVER, get_info=ALL)
-#         conn = Connection(server, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True)
-        
-#         # Tìm kiếm DN của người dùng trong tất cả các OUs
-#         search_filter = f"(sAMAccountName={username})"
-#         conn.search(search_base=BASE_DN, search_filter=search_filter, search_scope=SUBTREE, attributes=['distinguishedName'])
-        
-#         if not conn.entries:
-#             logging.debug("User DN not found.")
-#             return False, 'Người dùng không tồn tại.'
-
-#         user_dn = conn.entries[0].distinguishedName.value
-        
-#         # Thử xác thực người dùng với DN và mật khẩu
-#         user_conn = Connection(server, user=user_dn, password=password, auto_bind=True)
-#         logging.debug(f"User {username} authenticated successfully.")
-#         return True, 'Đăng nhập thành công!'
-#     except Exception as e:
-#         logging.error(f"Lỗi LDAP: {str(e)}")
-#         return False, f'Lỗi LDAP: {str(e)}'
-
 @app.route('/')
 def home():
     session_id = request.cookies.get('session_id')
@@ -158,24 +128,8 @@ def signin():
             logging.warning("Username or password missing.")
             return render_template('signin.html', error="Username or password is missing.")
         
-        if CHATBOT_URL == "http://157.66.46.53/v1":
-            success = True
-            message = "Thành Công!"
-        # else:
-        #     success, message = authenticate_user(username, password)
-        #     conn_db = connect_db()
-        #     # if not user_exists(conn_db, username):
-        #     if conn_db:
-        #         logging.debug("Connected to the database successfully.")
-        #     else:
-        #         logging.error("Failed to connect to the database.")
-        #     logging.debug(f"Creating new user if not exist: {username}")
-        #     try:
-        #         logging.debug(f"Attempting to insert user: {username}")
-        #         insert_user(conn_db, username, username)
-        #         logging.debug(f"User {username} inserted successfully.")
-        #     except Exception as e:
-        #         logging.error(f"Error occurred in insert_user: {str(e)}")
+        success = True
+        message = "Thành Công!"
 
         
         if success:
@@ -204,6 +158,77 @@ def signin():
     logging.debug("Rendering signin page.")
     return render_template('signin.html')
 
+def call_chat_messages_api_and_process_stream(user_message, user_id, file_name, file_type, file_id, conversation_id):
+    headers = {
+        'Authorization': f'Bearer {CHATBOT_APIKEY}',
+        'Content-Type': 'application/json'
+    }
+
+    body = {
+        "inputs": {
+            "file_name": file_name,
+            "file_type": file_type,
+            "chunk_id": file_id
+        },
+        "query": user_message,
+        "response_mode": "streaming",
+        "conversation_id": conversation_id if conversation_id else "",
+        "user": user_id
+    }
+
+    try:
+        with requests.post(CHATBOT_URL, headers=headers, json=body, stream=True) as response:
+            final_result = ""
+            buffer = ""
+            conversation_id = None
+            message_id = None
+
+            for chunk in response.iter_lines():
+                if chunk:
+                    chunk_str = chunk.decode('utf-8')
+                    buffer += chunk_str
+
+                    lines = buffer.split("\n")
+                    buffer = lines.pop()  # Giữ lại phần chưa hoàn chỉnh
+
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith("data:"):
+                            json_string = line.replace("data: ", "")
+                            if json_string == "[DONE]":
+                                return final_result, conversation_id, message_id  # Kết thúc stream
+
+                            try:
+                                json_data = json.loads(json_string)
+                                if "answer" in json_data:
+                                    final_result += json_data["answer"]
+                                if "conversation_id" in json_data:
+                                    conversation_id = json_data["conversation_id"]
+                                if "message_id" in json_data:
+                                    message_id = json_data["message_id"]
+                            except json.JSONDecodeError as e:
+                                print(f"Error parsing JSON: {e}")
+
+            # Xử lý phần còn lại trong buffer khi kết thúc stream
+            if buffer.startswith("data:"):
+                json_string = buffer.replace("data: ", "")
+                if json_string != "[DONE]":
+                    try:
+                        json_data = json.loads(json_string)
+                        if "answer" in json_data:
+                            final_result += json_data["answer"]
+                        if "conversation_id" in json_data:
+                            conversation_id = json_data["conversation_id"]
+                        if "message_id" in json_data:
+                            message_id = json_data["message_id"]
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing JSON: {e}")
+
+            return final_result, conversation_id, message_id
+
+    except requests.RequestException as e:
+        print(f"Error calling the API: {e}")
+        return None, None, None
 
 
 @app.route('/api/message', methods=['GET'])
@@ -217,7 +242,9 @@ def api_message():
     file_name = request.args.get('file_name')
     file_type = request.args.get('file_type')
 
+    # Parse file_id as a JSON object
     file_id = json.loads(file_id)
+    
     end_session(conn, user_id, session_id)
 
     if not user_message:
@@ -228,104 +255,96 @@ def api_message():
     transcripts = json.dumps(transcripts)
     print(conversation_id, transcripts, user_message, user_id, session_id)
 
-    url = f'{CHATBOT_URL}/chat-messages'
-    headers = {
-        'Authorization': f'Bearer {CHATBOT_APIKEY}',
-        'Content-Type': 'application/json'
-    }
-
-    body = {
-        "inputs": {
-            "file_name": file_name,
-            "file_type": file_type,
-            "chunk_id": file_id
-        },
-        "query": user_message,
-        "response_mode": "blocking",
-        "conversation_id": conversation_id if conversation_id else "",
-        "user": user_id
-    }
-    print(body)
     try:
-        
-        response = requests.post(url, headers=headers, json=body)
-        response.raise_for_status()
+        # Gọi API và xử lý streaming response
+        result_answer, conversation_id, message_id = call_chat_messages_api_and_process_stream(
+            user_message, user_id, file_name, file_type, file_id, conversation_id
+        )
 
-        result = response.json()
+        if not result_answer:
+            return jsonify({"result": "Không nhận được phản hồi từ chatbot"}), 500
 
-        print("Result:", result)
-        result_answer = decode_unicode_escapes(result["answer"])
-        domain = extract_domain(result_answer)
-        input_token = len(user_message)//4 + 1
-        output_token = len(result)//4 + 1
+        # Lưu lại conversation_id và message_id
+        print("Conversation ID:", conversation_id)
+        print("Message ID:", message_id)
+
+        input_token = len(user_message) // 4 + 1
+        output_token = len(result_answer) // 4 + 1
         total_token = input_token + output_token
-        timestamp = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh'))
-        timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S %z')
-        print(result["message_id"])
-        conversation(conn, result["message_id"], session_id, user_id, "gpt", user_message, input_token, result_answer[:-len(domain)-1], output_token, total_token, timestamp, conversation_id, domain)
+        timestamp = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%Y-%m-%d %H:%M:%S %z')
+        
+        conversation(conn, message_id, session_id, user_id, user_message, input_token, result_answer, output_token, total_token, timestamp, conversation_id)
+
         conn.close()
-        print("Done!")
-        return jsonify({"result": result_answer, "message_id": result["message_id"]})
+        return jsonify({"result": result_answer, "conversation_id": conversation_id, "message_id": message_id})
 
     except requests.exceptions.RequestException as e:
         app.logger.error(f"RequestException: {e}")
-        error_logs(conn, user_id, session_id, conversation_id, user_message, e, "500")
+        error_logs(conn, user_id, session_id, conversation_id, user_message, str(e), "500")
         return jsonify({"result": f"Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này"}), 500
     except Exception as e:
         app.logger.error(f"Exception: {e}")
-        error_logs(conn, user_id, session_id, conversation_id, user_message, e, "500")
+        error_logs(conn, user_id, session_id, conversation_id, user_message, str(e), "500")
         return jsonify({"result": f"Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này"}), 500
 
 
 @app.route('/api/start_conversation', methods=['POST'])
 def start_conversation():
     conn = connect_db()
-    user_id = request.json['user_id']
-    session_id = request.json['session_id']
-
-    url = f'{CHATBOT_URL}/chat-messages'
-    headers = {
-        'Authorization': f'Bearer {CHATBOT_APIKEY}',
-        'Content-Type': 'application/json'
-    }
-    body = {
-        "inputs": {},
-        "query": "Xin chào",
-        "response_mode": "blocking",
-        "conversation_id": "",
-        "user": user_id
-    }
-    app.logger.info(f"Headers: {headers}")
     try:
-        response = requests.post(url, headers=headers, json=body)
-        response.raise_for_status()
+        # Lấy dữ liệu từ request JSON
+        user_id = request.json.get('user_id')
+        session_id = request.json.get('session_id')
 
-        data = response.json()
-        conversation_id = data['conversation_id']
+        if not user_id or not session_id:
+            return jsonify({"error": "Thiếu user_id hoặc session_id"}), 400
 
-        result = response.json()
+        # Thiết lập thông tin cần gửi
+        file_name = ""  # Vì không có file, trường này có thể để trống
+        file_type = ""  # Vì không có file, trường này có thể để trống
+        file_id = ""  # Không có file
+        conversation_id = ""  # Khi bắt đầu, chưa có conversation_id
 
-        print("Result:", result)
-        result_answer = decode_unicode_escapes(result["answer"])
-        domain = extract_domain(result_answer)
-        input_token = 0
-        output_token = len(result)//4 + 1
+        # Gọi hàm xử lý streaming
+        result_answer, conversation_id, message_id = call_chat_messages_api_and_process_stream(
+            "Xin chào", user_id, file_name, file_type, file_id, conversation_id
+        )
+
+        if not result_answer:
+            app.logger.error("Không nhận được phản hồi từ API chatbot.")
+            return jsonify({"error": "Không nhận được phản hồi từ chatbot"}), 500
+
+        # Tính toán token
+        input_token = 0  # Tin nhắn đầu tiên "Xin chào" không tính token đầu vào
+        output_token = len(result_answer) // 4 + 1
         total_token = input_token + output_token
-        timestamp = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh'))
-        timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S %z')
+        timestamp = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%Y-%m-%d %H:%M:%S %z')
 
+        # Lưu thông tin cuộc hội thoại vào cơ sở dữ liệu
         add_conversation(conn, conversation_id, session_id, user_id)
-        conversation(conn, data["message_id"], session_id, user_id, "gpt", "", input_token, result_answer[:-len(domain)-1], output_token, total_token, timestamp, conversation_id, domain)
+        conversation(conn, message_id, session_id, user_id, input_token, result_answer, output_token, total_token, timestamp, conversation_id)
+
         conn.close()
-        return jsonify({"conversation_id": conversation_id, "message_id": result["message_id"]})
+
+        # Trả về thông tin conversation_id và message_id
+        return jsonify({
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "result": result_answer
+        })
+
     except requests.exceptions.RequestException as e:
         app.logger.error(f"RequestException: {e}")
-        error_logs(conn, user_id, session_id, conversation_id, "", e, "501")
-        return jsonify({"result": f"Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này"}), 501
+        error_logs(conn, user_id, session_id, "", "Xin chào", str(e), "501")
+        conn.close()
+        return jsonify({"error": "Lỗi khi gọi API chatbot"}), 501
+
     except Exception as e:
         app.logger.error(f"Exception: {e}")
-        error_logs(conn, user_id, session_id, conversation_id, "", e, "501")
-        return jsonify({"result": f"Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này"}), 501
+        error_logs(conn, user_id, session_id, "", "Xin chào", str(e), "501")
+        conn.close()
+        return jsonify({"error": "Lỗi không xác định"}), 501
+
 
 @app.route('/api/user', methods=['POST'])
 def api_user():
@@ -470,16 +489,35 @@ def embed():
 
     return response
 
-def extract_domain(input_string):
-            match = re.search(r'False', input_string)
-            if match:
-                matchGroup = re.search(r'False Group \d+ Doc', input_string)
-                if matchGroup:
-                    return matchGroup.group(0)
-                else:
-                    return match.group(0)
-            else:
-                return "True"
+from werkzeug.utils import secure_filename
+import os
+
+@app.route('/api/upload_file', methods=['POST'])
+def upload_file():
+    user_id = request.form.get('user_id')
+    session_id = request.form.get('session_id')
+    conversation_id = request.form.get('conversation_id')
+    file_size = request.form.get('file_size')
+    mime_type = request.form.get('mime_type')
+    created_by = request.form.get('created_by')
+
+    file = request.files['files[]']  # Nhận file từ request
+
+    if file:
+        # Sử dụng secure_filename để đảm bảo tên file an toàn
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+
+        # Insert thông tin file vào cơ sở dữ liệu
+        conn = connect_db()
+        insert_file(conn, user_id, session_id, conversation_id, filename, file_path, file_size, mime_type, created_by)
+        conn.close()
+
+        return jsonify({'message': f'File {filename} uploaded successfully'}), 200
+
+    return jsonify({'error': 'No file uploaded'}), 400
+
             
 if __name__ == '__main__':
     app.run(debug=True)

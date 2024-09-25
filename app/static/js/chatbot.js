@@ -275,6 +275,20 @@ function sendMessage(message = null) {
   }
 
   const userInput = document.getElementById("userInput");
+  const fileInput = document.getElementById("fileInput").files; // Lấy tất cả các files
+  
+  if (!userInput && fileInput.length === 0) {
+    alert("Vui lòng nhập câu hỏi hoặc chọn file!");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("message", userInput);
+  
+  // Thêm tất cả các files vào formData
+  for (let i = 0; i < fileInput.length; i++) {
+    formData.append("files[]", fileInput[i]);
+  }
   const messageText = message || userInput.value.trim();
   if (messageText === "") {
     return;

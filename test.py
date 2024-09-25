@@ -2,7 +2,7 @@ import jwt
 from datetime import datetime, timedelta
 
 # Thông tin cần mã hóa
-user_id = "phuongpd"
+user_id = "chatbot"
 secret_key = "secret"  # Khóa bí mật để mã hóa
 
 # Thời gian hiện tại

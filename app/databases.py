@@ -86,12 +86,12 @@ def conversation(conn, message_id, session_id, user_id, llm_type, inputs, token_
         print(f"Session {session_id} does not exist.")
         return
     cur = conn.cursor()
-    print("all variables:", message_id, session_id, user_id, llm_type, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain)
+    print("all variables:", message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain)
     insert_conversation_query = """
-    INSERT INTO conversation_logs (message_id, session_id, user_id, llm_type, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain)
+    INSERT INTO conversation_logs (message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-    cur.execute(insert_conversation_query, (message_id, session_id, user_id, llm_type, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain))
+    cur.execute(insert_conversation_query, (message_id, session_id, user_id, inputs, token_input, outputs, token_output, total_token, timestamp, conversation_id, domain))
     print("Pass!")
     conn.commit()
     cur.close()
@@ -163,19 +163,6 @@ def get_conversation_id(conn, user_id, session_id):
     cur.close()
     return conversation_id
 
-def get_bot_id(conn, user_id):
-    cur = conn.cursor()
-    cur.execute("SELECT bot_id FROM users WHERE user_id = %s", (user_id,))
-    bot_id = cur.fetchone()
-    cur.close()
-    return bot_id
-
-def bot_id_exist(conn, bot_id):
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM users WHERE bot_id = %s", (bot_id,))
-    exists = cur.fetchone() is not None
-    cur.close()
-    return exists
 
 def write_feedback(conn, user_id, session_id, message_id, feedback_type, feedback_text):
     if not session_exists(conn, user_id, session_id):
@@ -212,3 +199,41 @@ def error_logs(conn, user_id, session_id, conversation_id, input_message, error_
     conn.commit()
     cur.close()
     print(f"Error log inserted successfully.")
+
+def insert_file(conn, file_id, user_id, session_id, conversation_id, file_name, file_path, file_size, mime_type, created_by):
+    cur = conn.cursor()
+    created_at = updated_at = datetime.now()  # Sử dụng thời gian hiện tại
+    insert_file_query = """
+    INSERT INTO upload_files (file_id, user_id, session_id, conversation_id, file_name, file_path, file_size, mime_type, created_at, created_by, updated_at, updated_by)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cur.execute(insert_file_query, (file_id, user_id, session_id, conversation_id, file_name, file_path, file_size, mime_type, created_at, created_by, updated_at, created_by))
+    conn.commit()
+    cur.close()
+    print(f"File {file_name} inserted successfully.")
+
+def get_file(conn, file_id):
+    cur = conn.cursor()
+    get_file_query = """
+    SELECT * FROM upload_files WHERE file_id = %s
+    """
+    cur.execute(get_file_query, (file_id,))
+    file_info = cur.fetchone()
+    cur.close()
+    
+    if file_info:
+        print(f"File {file_info[4]} retrieved successfully.")
+    else:
+        print(f"File with ID {file_id} does not exist.")
+    
+    return file_info  # Trả về thông tin file (có thể điều chỉnh cấu trúc dữ liệu trả về)
+
+def delete_file(conn, file_id):
+    cur = conn.cursor()
+    delete_file_query = """
+    DELETE FROM upload_files WHERE file_id = %s
+    """
+    cur.execute(delete_file_query, (file_id,))
+    conn.commit()
+    cur.close()
+    print(f"File {file_id} deleted successfully.")
