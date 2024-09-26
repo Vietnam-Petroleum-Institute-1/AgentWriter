@@ -211,13 +211,13 @@ def call_chat_messages_api_and_process_stream(
     }
 
     body = {
-        "inputs": {"file_name": file_name, "file_type": file_type, "chunk_id": file_id},
+        "inputs": {"chunk_id": file_id},
         "query": user_message,
         "response_mode": "streaming",
         "conversation_id": conversation_id if conversation_id else "",
         "user": user_id,
     }
-
+    app.logger.debug(f'Body: {body}')
     try:
         url = f"{CHATBOT_URL}/chat-messages"
         with requests.post(url, headers=headers, json=body, stream=True) as response:
