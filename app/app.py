@@ -26,6 +26,7 @@ from databases import (
     get_transcripts,
     add_conversation,
     get_conversation_id,
+    get_file_by_conversation,
     write_feedback,
     session_valid,
     error_logs,
@@ -298,13 +299,13 @@ def api_message():
     user_message = request.args.get("text")
     session_id = request.args.get("session_id")
     conversation_id = request.args.get("conversation_id")
-    file_id = request.args.get("file_id")
+    file_id = request.args.get("file_id").split(",")
     file_name = request.args.get("file_name")
     file_type = request.args.get("file_type")
 
     # Parse file_id as a JSON object
     # file_id = json.loads(file_id)
-
+    print(file_id)
     end_session(conn, user_id, session_id)
 
     if not user_message:
@@ -552,11 +553,11 @@ def api_conversation_id():
     session_id = request.json["session_id"]
 
     conversation_id = get_conversation_id(conn, user_id, session_id)
-    print(conversation_id)
+    upload_files = get_file_by_conversation(conn, conversation_id[0])
     if conversation_id is None:
         return jsonify({"result": "Conversation ID not found"}), 404
     else:
-        return jsonify({"result": conversation_id[0]})
+        return jsonify({"result": conversation_id[0], "files": upload_files})
 
 
 @app.route("/api/feedback", methods=["POST"])
@@ -705,9 +706,11 @@ def upload_file():
 
         # Insert thông tin file vào cơ sở dữ liệu
         print("Index node hash: ", index_node_hash)
+        file_id = f"{uuid.uuid4()}"
         conn = connect_db()
         insert_file(
             conn,
+            file_id,
             index_node_hash,
             user_id,
             session_id,

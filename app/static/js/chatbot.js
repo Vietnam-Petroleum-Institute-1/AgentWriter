@@ -250,7 +250,15 @@ function getConversation(user_id, session_id) {
       conversationId = data.result
       console.log("Conversation ID:", data.result);
       sessionStorage.setItem("conversation_id", data.result);
+      const files = data.files;
 
+      if (files) {
+        for (let file of files) {
+          file_id.push(file[1])
+          selectedFiles.push(file[2]);
+        }
+        updateFileList();
+      }
       const userInput = document.getElementById("userInput");
       const sendButton = document.getElementById("sendButton");
       if (userInput && sendButton) {
@@ -752,14 +760,14 @@ async function handleFileSelect(event) {
           console.log("upload file:", data);
           file_id.push(data.file_id);
           selectedFiles.push(file.name);
+          updateFileList();
           document.getElementById("loading-1").style.display = "none";
           document.getElementById("file_name_1").innerHTML = "";
-          updateFileList();
         })
         .catch((error) => {
           console.log(error);
           document.getElementById("loading-1").style.display = "none";
-          document.getElementById("file_name_1").innerHTML = "Loi ong oi";
+          document.getElementById("file_name_1").innerHTML = "FAILED!!!";
         });
     }
   }
