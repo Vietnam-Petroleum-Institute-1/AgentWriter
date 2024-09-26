@@ -5,6 +5,9 @@ let feedbackMessageId = null;
 let selectedFiles = []; // Mảng lưu trữ các tệp đã chọn
 let conversationId = null;
 const file_id = [];
+const index_node_hashes = [];
+const file_name = [];
+const file_type = [];
 
 window.onload = function () {
   console.log("Window loaded");
@@ -127,10 +130,10 @@ function getCookie(name) {
   return null;
 }
 
-function checkOrCreateSession(user_id, session_id) {
+async function checkOrCreateSession(user_id, session_id) {
   console.log("Checking or creating session");
   showWaitingBubble();
-  return fetch("/api/session_exist", {
+  return await fetch("/api/session_exist", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -138,11 +141,11 @@ function checkOrCreateSession(user_id, session_id) {
     body: JSON.stringify({ user_id, session_id }),
   })
     .then((response) => response.json())
-    .then((data) => {
+    .then(async (data) => {
       console.log("Session existence check:", data);
       if (data.result === 1) {
         document.getElementById("chatContainer").style.display = "flex";
-        return getConversation(user_id, session_id);
+        return await getConversation(user_id, session_id);
       } else if (data.result === 0) {
         const start_time = new Date().toISOString();
         const end_time = new Date(Date.now() + 3600000).toISOString();
@@ -235,10 +238,10 @@ function startConversation(user_id, session_id) {
     });
 }
 
-function getConversation(user_id, session_id) {
+async function getConversation(user_id, session_id) {
   console.log("Getting conversation");
   showWaitingBubble();
-  return fetch("/api/conversation_id", {
+  await fetch("/api/conversation_id", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -254,7 +257,8 @@ function getConversation(user_id, session_id) {
 
       if (files) {
         for (let file of files) {
-          file_id.push(file[1])
+          file_id.push(file[0])
+          index_node_hashes.push(file[1]);
           selectedFiles.push(file[2]);
         }
         updateFileList();
@@ -345,7 +349,7 @@ function sendMessage(message = null, file_name = [], file_type = []) {
       session_id
     )}&conversation_id=${encodeURIComponent(
       conversation_id
-    )}&file_id=${encodeURIComponent(file_id)}&file_name=${encodeURIComponent(
+    )}&file_id=${encodeURIComponent(index_node_hashes)}&file_name=${encodeURIComponent(
       file_name
     )}&file_type=${encodeURIComponent(file_type)}`
   )
@@ -714,6 +718,7 @@ function updateFileList() {
 
     // Tạo nút xóa
     const deleteButton = document.createElement("button");
+    deleteButton.id = file_id[index];
     deleteButton.textContent = "X";
     deleteButton.className = "delete-button";
     deleteButton.onclick = () => removeFile(index); // Gán sự kiện xóa cho nút
@@ -759,6 +764,7 @@ async function handleFileSelect(event) {
         .then((data) => {
           console.log("upload file:", data);
           file_id.push(data.file_id);
+          index_node_hashes.push(data.index_node_hash);
           selectedFiles.push(file.name);
           updateFileList();
           document.getElementById("loading-1").style.display = "none";

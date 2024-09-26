@@ -321,7 +321,6 @@ def api_message():
 
     transcripts = get_transcripts(conn, user_id, session_id)
     transcripts = json.dumps(transcripts)
-    print(conversation_id, transcripts, user_message, user_id, session_id)
 
     try:
         # Gọi API và xử lý streaming response
@@ -553,6 +552,7 @@ def api_conversation_id():
     session_id = request.json["session_id"]
 
     conversation_id = get_conversation_id(conn, user_id, session_id)
+    print(conversation_id)
     upload_files = get_file_by_conversation(conn, conversation_id[0])
     if conversation_id is None:
         return jsonify({"result": "Conversation ID not found"}), 404
@@ -727,7 +727,8 @@ def upload_file():
             jsonify(
                 {
                     "message": f"File {filename} uploaded successfully",
-                    "file_id": index_node_hash,
+                    "file_id": file_id,
+                    "index_node_hash": index_node_hash,
                 }
             ),
             200,
