@@ -405,8 +405,35 @@ def start_conversation():
         # Thiết lập thông tin cần gửi
         file_name = ""  # Vì không có file, trường này có thể để trống
         file_type = ""  # Vì không có file, trường này có thể để trống
-        file_id = ""  # Không có file
         conversation_id = ""  # Khi bắt đầu, chưa có conversation_id
+        # Kiểm tra mime type và đặt URL tương ứng
+
+        url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments"
+
+            # Dữ liệu gửi qua API
+        payload = {
+            "segments": [
+                {
+                    "content": "None",  # Nội dung được lấy từ file
+                }
+            ]
+        }
+
+        headers = {
+            "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
+            "Content-Type": "application/json",
+        }
+
+        # Gửi request POST đến API
+        response = requests.post(url, headers=headers, json=payload)
+
+        # Kiểm tra nếu request thành công
+        if response.status_code == 200:
+            response_json = response.json()
+            # Trích xuất `index_node_hash`
+            if "data" in response_json and len(response_json["data"]) > 0:
+                index_node_hash = response_json["data"][0].get("index_node_hash", "")
+                file_id = index_node_hash
 
         # Gọi hàm xử lý streaming
         result_answer, conversation_id, message_id = (
@@ -453,6 +480,7 @@ def start_conversation():
                 "conversation_id": conversation_id,
                 "message_id": message_id,
                 "result": result_answer,
+                "file_id": file_id
             }
         )
 
