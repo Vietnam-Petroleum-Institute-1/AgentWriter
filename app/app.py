@@ -203,7 +203,7 @@ import re
 
 
 def call_chat_messages_api_and_process_stream(
-    user_message, user_id, file_name, file_type, file_id, conversation_id
+    user_message, user_id, file_id, conversation_id
 ):
     headers = {
         "Authorization": f"Bearer {CHATBOT_APIKEY}",
@@ -211,7 +211,7 @@ def call_chat_messages_api_and_process_stream(
     }
 
     body = {
-        "inputs": {"chunk_id": file_id},
+        "inputs": {"chunk_id":file_id},
         "query": user_message,
         "response_mode": "streaming",
         "conversation_id": conversation_id if conversation_id else "",
@@ -299,8 +299,6 @@ def api_message():
     session_id = request.args.get("session_id")
     conversation_id = request.args.get("conversation_id")
     file_id = request.args.get("file_id")
-    file_name = request.args.get("file_name")
-    file_type = request.args.get("file_type")
 
     # Parse file_id as a JSON object
     # file_id = json.loads(file_id)
@@ -326,7 +324,7 @@ def api_message():
         # Gọi API và xử lý streaming response
         result_answer, conversation_id, message_id = (
             call_chat_messages_api_and_process_stream(
-                user_message, user_id, file_name, file_type, file_id, conversation_id
+                user_message, user_id, file_id, conversation_id
             )
         )
 
@@ -402,9 +400,6 @@ def start_conversation():
         if not user_id or not session_id:
             return jsonify({"error": "Thiếu user_id hoặc session_id"}), 400
 
-        # Thiết lập thông tin cần gửi
-        file_name = ""  # Vì không có file, trường này có thể để trống
-        file_type = ""  # Vì không có file, trường này có thể để trống
         conversation_id = ""  # Khi bắt đầu, chưa có conversation_id
         # Kiểm tra mime type và đặt URL tương ứng
 
@@ -434,11 +429,12 @@ def start_conversation():
             if "data" in response_json and len(response_json["data"]) > 0:
                 index_node_hash = response_json["data"][0].get("index_node_hash", "")
                 file_id = index_node_hash
+                segment_id = response_json["data"][0].get("id", "")
 
         # Gọi hàm xử lý streaming
         result_answer, conversation_id, message_id = (
             call_chat_messages_api_and_process_stream(
-                "Xin chào", user_id, file_name, file_type, file_id, conversation_id
+                "Xin chào", user_id, file_id, conversation_id
             )
         )
 
@@ -480,7 +476,8 @@ def start_conversation():
                 "conversation_id": conversation_id,
                 "message_id": message_id,
                 "result": result_answer,
-                "file_id": file_id
+                "start_chunk_id": file_id,
+                "start_segment_id": segment_id
             }
         )
 
@@ -505,7 +502,6 @@ def api_user():
         insert_user(conn, user_id, user_id)
     conn.close()
     return jsonify({"result": "User added successfully"})
-
 
 @app.route("/api/user_exist", methods=["POST"])
 def user_exist():
@@ -760,6 +756,41 @@ def upload_file():
 
     return jsonify({"error": "No file uploaded"}), 400
 
+@app.route("/api/update_upload_file", methods=["POST"])
+def update_file():
+    segment_id = request.form.get("segment_id")
+    content = request.form.get("updated_file_id")
+    url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
+
+        # Dữ liệu gửi qua API
+    payload = {
+        "segments": [
+            {
+                "content": content,  # Nội dung được lấy từ file
+            }
+        ]
+    }
+
+    headers = {
+        "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
+        "Content-Type": "application/json",
+    }
+
+    # Gửi request POST đến API
+    response = requests.post(url, headers=headers, json=payload)
+
+    # Kiểm tra nếu request thành công
+    if response.status_code == 200:
+        return (
+        jsonify(
+            {
+                "message": f"Chunk updated successfully",
+            }
+        ),
+        200,
+    )
+    else:
+        return jsonify({"error": "No file uploaded"}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)

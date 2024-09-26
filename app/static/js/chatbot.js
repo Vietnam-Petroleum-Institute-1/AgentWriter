@@ -376,9 +376,7 @@ function sendMessage(message = null) {
       session_id
     )}&conversation_id=${encodeURIComponent(
       conversation_id
-    )}&file_id=${encodeURIComponent(file_id)}&file_name=${encodeURIComponent(
-      file_name
-    )}&file_type=${encodeURIComponent(file_type)}`
+    )}&file_id=${encodeURIComponent(file_id)}`
   )
     .then((response) => response.json())
     .then((data) => {
@@ -397,56 +395,6 @@ function sendMessage(message = null) {
         "Xin lỗi, tôi không đủ thông tin để trả lời câu hỏi này."
       );
       isWaitingForBot = false;
-    });
-}
-
-function processBotResponse(result, messageId, messageText, user_id) {
-  const domainMatch = result.match(/Group (1|2|3|4) Doc$/);
-  console.log("Đây là domainMatch", domainMatch);
-  if (domainMatch) {
-    const domain = `False Group ${domainMatch[1]}`;
-
-    const resultWithoutDomain = result
-      .replace(/False Group (1|2|3|4) Doc$/, "")
-      .trim();
-
-    addMessageToChat("bot", resultWithoutDomain, messageId);
-
-    uploadPendingFAQ(resultWithoutDomain, messageText, domain, user_id);
-  } else if (result.match(/False/)) {
-    const domain = `False`;
-
-    const resultWithoutDomain = result.replace(/False/, "").trim();
-
-    addMessageToChat("bot", resultWithoutDomain, messageId);
-
-    uploadPendingFAQ(resultWithoutDomain, messageText, domain, user_id);
-  } else {
-    const resultWithoutDomain = result.replace(/True/, "").trim();
-
-    addMessageToChat("bot", resultWithoutDomain, messageId);
-  }
-}
-
-function uploadPendingFAQ(answer, question, domain, user_id) {
-  fetch("/api/upload_pending_FAQ", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      question: question,
-      answer: answer,
-      domain: domain,
-      user_id: user_id,
-    }),
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log("Success:", data);
-    })
-    .catch((error) => {
-      console.error("Error:", error);
     });
 }
 
