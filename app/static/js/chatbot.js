@@ -266,71 +266,97 @@ function handleKeyPress(event) {
   }
 }
 
-function sendMessage(message = null, file_id = [], file_name = [], file_type = []) {
-  if (!isConversationStarted || isWaitingForBot) {
-    console.log(
-      "Conversation has not started yet or still waiting for bot response."
-    );
-    return;
-  }
+function uploadFiles() {
+  const fileInput = document.getElementById("fileInput").files;
 
-  const userInput = document.getElementById("userInput");
-  const fileInput = document.getElementById("fileInput").files; // Lấy tất cả các files
-
-  if (!userInput && fileInput.length === 0) {
-    alert("Vui lòng nhập câu hỏi hoặc chọn file!");
+  if (fileInput.length === 0) {
+    alert("Vui lòng chọn file trước khi upload!");
     return;
   }
 
   const formData = new FormData();
-  formData.append("message", userInput);
-
-  // Thêm tất cả các files vào formData
   for (let i = 0; i < fileInput.length; i++) {
     formData.append("files[]", fileInput[i]);
   }
-  const messageText = message || userInput.value.trim();
-  if (messageText === "") {
+
+  fetch("/api/upload_file", {
+    method: "POST",
+    body: formData
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.uploaded_files) {
+        console.log("Files uploaded successfully:", data.uploaded_files);
+
+        // Lưu lại index_node_hash của mỗi file sau khi upload
+        sessionStorage.setItem("uploaded_files", JSON.stringify(data.uploaded_files));
+        alert("Files uploaded successfully!");
+      } else {
+        alert("Failed to upload files");
+      }
+    })
+    .catch((error) => {
+      console.error("Error uploading files:", error);
+      alert("Error uploading files");
+    });
+}
+
+
+function sendMessage(message = null) {
+  if (!isConversationStarted || isWaitingForBot) {
+    console.log("Conversation has not started yet or still waiting for bot response.");
     return;
   }
 
-  const user_id = getCookie("user_id");
-  const session_id = getCookie("session_id");
-  const conversation_id = sessionStorage.getItem("conversation_id");
+  const userInput = document.getElementById("userInput").value.trim();
 
-  if (!conversation_id) {
-    console.error("Error: conversation_id is undefined before sending message");
+  // Lấy thông tin file đã upload từ sessionStorage
+  const uploadedFiles = JSON.parse(sessionStorage.getItem("uploaded_files"));
+
+  if (userInput === "" && !uploadedFiles) {
+    alert("Vui lòng nhập câu hỏi hoặc upload file trước!");
     return;
   }
 
-  addMessageToChat(message ? "bot" : "user", messageText, null);
+  const formData = new FormData();
+  formData.append("text", userInput);
+  formData.append("user_id", getCookie("user_id"));
+  formData.append("session_id", getCookie("session_id"));
+  formData.append("conversation_id", sessionStorage.getItem("conversation_id"));
 
-  if (!message) {
-    userInput.value = "";
+  // Nếu có file đã upload, thêm thông tin file vào formData
+  if (uploadedFiles) {
+    uploadedFiles.forEach(file => {
+      formData.append("file_id[]", file.file_id);
+      formData.append("file_name[]", file.file_name);
+    });
   }
+
+  // Hiển thị tin nhắn của người dùng
+  if (userInput) {
+    addMessageToChat("user", userInput, null);
+  }
+
   isWaitingForBot = true;
   addWaitingBubble();
 
   const delayMessageTimeout = setTimeout(() => {
     removeWaitingBubble();
     addMessageToChat("bot", "Chờ chút nhé, tôi đang tổng hợp lại câu trả lời cho bạn đây.");
-    addWaitingBubble()
+    addWaitingBubble();
   }, 4000);
 
-  fetch(
-    `/api/message?text=${encodeURIComponent(
-      messageText
-    )}&user_id=${encodeURIComponent(user_id)}&session_id=${encodeURIComponent(
-      session_id
-    )}&conversation_id=${encodeURIComponent(conversation_id)}&file_id=${encodeURIComponent(file_id)}&file_name=${encodeURIComponent(file_name)}&file_type=${encodeURIComponent(file_type)}`
-  )
+  // Sử dụng fetch với phương thức POST để gửi FormData
+  fetch("/api/message", {
+    method: "GET",
+    body: formData
+  })
     .then((response) => response.json())
     .then((data) => {
       clearTimeout(delayMessageTimeout);
       console.log("Message sent:", data);
       removeWaitingBubble();
-      processBotResponse(data.result, data.message_id, messageText, user_id);
-      handleResponse(data.result);
+      addMessageToChat("bot", data.result, data.message_id);
       isWaitingForBot = false;
     })
     .catch((error) => {
@@ -342,56 +368,6 @@ function sendMessage(message = null, file_id = [], file_name = [], file_type = [
     });
 }
 
-function processBotResponse(result, messageId, messageText, user_id) {
-  const domainMatch = result.match(/Group (1|2|3|4) Doc$/);
-  console.log("Đây là domainMatch", domainMatch);
-  if (domainMatch) {
-    const domain = `False Group ${domainMatch[1]}`;
-
-    const resultWithoutDomain = result.replace(/False Group (1|2|3|4) Doc$/, "").trim();
-
-    addMessageToChat("bot", resultWithoutDomain, messageId);
-
-    uploadPendingFAQ(resultWithoutDomain, messageText, domain, user_id);
-  } else if (result.match(/False/)) {
-    const domain = `False`;
-
-    const resultWithoutDomain = result.replace(/False/, "").trim();
-
-    addMessageToChat("bot", resultWithoutDomain, messageId);
-
-    uploadPendingFAQ(resultWithoutDomain, messageText, domain, user_id);
-  } else {
-    const resultWithoutDomain = result.replace(/True/, "").trim();
-
-    addMessageToChat("bot", resultWithoutDomain, messageId);
-
-
-  }
-}
-
-
-function uploadPendingFAQ(answer, question, domain, user_id) {
-  fetch("/api/upload_pending_FAQ", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      question: question,
-      answer: answer,
-      domain: domain,
-      user_id: user_id,
-    }),
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log("Success:", data);
-    })
-    .catch((error) => {
-      console.error("Error:", error);
-    });
-}
 
 // Hàm để thêm tin nhắn vào giao diện
 function addMessageToChat(sender, message, messageId) {
@@ -462,8 +438,6 @@ function copyToClipboard(text) {
   document.body.removeChild(textarea);
   alert("Copied to clipboard");
 }
-
-
 
 function addWaitingBubble() {
   removeWaitingBubble();

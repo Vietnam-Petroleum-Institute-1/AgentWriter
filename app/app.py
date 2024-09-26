@@ -297,8 +297,8 @@ def api_message():
     user_message = request.args.get("text")
     session_id = request.args.get("session_id")
     conversation_id = request.args.get("conversation_id")
-    file_id = request.args.get("file_id")
-    file_name = request.args.get("file_name")
+    file_id = request.form.getlist("file_id[]")
+    file_name = request.form.getlist("file_name[]")
     file_type = request.args.get("file_type")
 
     # Parse file_id as a JSON object
@@ -668,62 +668,50 @@ def extract_docx_content(file_path):
 
 @app.route("/api/upload_file", methods=["POST"])
 def upload_file():
-    user_id = request.form.get("user_id")
-    session_id = request.form.get("session_id")
-    conversation_id = request.form.get("conversation_id")
-    file_size = request.form.get("file_size")
-    mime_type = request.form.get("mime_type")
-    created_by = request.form.get("created_by")
+    files = request.files.getlist("files[]")
 
-    file = request.files["files[]"]  # Nhận file từ request
+    if not files:
+        return jsonify({"error": "No file uploaded"}), 400
 
-    if file:
+    uploaded_files_info = []
+    conn = connect_db()
+
+    for file in files:
         # Sử dụng secure_filename để đảm bảo tên file an toàn
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
 
-        # Trích xuất nội dung từ file dựa trên loại MIME type
-        content = ""
-        if mime_type == "csv":
-            content = extract_csv_content(file_path)
-        elif mime_type == "docx":
-            content = extract_docx_content(file_path)
-        else:
-            return jsonify({"error": "Unsupported MIME type"}), 400
+        mime_type = file.mimetype
+        file_size = os.path.getsize(file_path)
 
         # Gọi API upload với nội dung trích xuất từ file
-        index_node_hash, error = call_upload_api(mime_type, content)
+        index_node_hash, error = call_upload_api(mime_type, file.read())
         if error:
             return jsonify({"error": error}), 400
 
         # Insert thông tin file vào cơ sở dữ liệu
-        conn = connect_db()
         insert_file(
             conn,
             index_node_hash,
-            user_id,
-            session_id,
-            conversation_id,
+            None,  # user_id không cần cho việc upload
+            None,  # session_id không cần cho việc upload
+            None,  # conversation_id không cần cho việc upload
             filename,
             file_path,
             file_size,
             mime_type,
-            created_by,
-        )
-        conn.close()
-
-        return (
-            jsonify(
-                {
-                    "message": f"File {filename} uploaded successfully",
-                    "file_id": index_node_hash,
-                }
-            ),
-            200,
+            None  # created_by không cần thiết khi upload file
         )
 
-    return jsonify({"error": "No file uploaded"}), 400
+        uploaded_files_info.append({"file_id": index_node_hash, "file_name": filename})
+
+    conn.close()
+
+    return jsonify({
+        "message": f"{len(uploaded_files_info)} files uploaded successfully",
+        "uploaded_files": uploaded_files_info
+    }), 200
 
 
 if __name__ == "__main__":

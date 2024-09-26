@@ -12,10 +12,10 @@ HOST = os.getenv("DB_HOST")
 
 def connect_db():
     return psycopg2.connect(
-        dbname="pvpower",
+        dbname="agent_writer",
         user="phuongpd",
         password="vdkvn22.05",
-        host="localhost",
+        host="db",
         port="5432",
     )
 
@@ -92,7 +92,7 @@ def session_continue(conn, user_id):
     cur = conn.cursor()
     cur.execute(
         "SELECT session_id FROM sessions WHERE user_id = %s AND end_time > NOW() ORDER BY end_time DESC LIMIT 1",
-        (user_id,),
+        (user_id,)
     )
     session = cur.fetchone()
     cur.close()
