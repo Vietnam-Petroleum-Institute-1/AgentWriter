@@ -204,6 +204,9 @@ function startConversation(user_id, session_id) {
     .then((data) => {
       console.log("Start conversation result:", data);
       const conversation_id = data.conversation_id;
+      const segment_id = data.segment_id;
+
+      sessionStorage.setItem("start_segment_id", start_segment_id);
       sessionStorage.setItem("conversation_id", conversation_id);
 
       const userInput = document.getElementById("userInput");
@@ -247,7 +250,7 @@ function getConversation(user_id, session_id) {
   })
     .then((response) => response.json())
     .then((data) => {
-      conversationId = data.result
+      conversationId = data.result;
       console.log("Conversation ID:", data.result);
       sessionStorage.setItem("conversation_id", data.result);
 
@@ -293,7 +296,7 @@ function sendMessage(message = null, file_name = [], file_type = []) {
   }
 
   const formData = new FormData();
-  formData.append("message", userInput);
+  formData.append("message", userInput.value);
 
   // Thêm tất cả các files vào formData
   for (let i = 0; i < fileInput.length; i++) {
@@ -302,7 +305,7 @@ function sendMessage(message = null, file_name = [], file_type = []) {
 
   fetch("/api/upload_file", {
     method: "POST",
-    body: formData
+    body: formData,
   })
     .then((response) => response.json())
     .then((data) => {
@@ -310,7 +313,10 @@ function sendMessage(message = null, file_name = [], file_type = []) {
         console.log("Files uploaded successfully:", data.uploaded_files);
 
         // Lưu lại index_node_hash của mỗi file sau khi upload
-        sessionStorage.setItem("uploaded_files", JSON.stringify(data.uploaded_files));
+        sessionStorage.setItem(
+          "uploaded_files",
+          JSON.stringify(data.uploaded_files)
+        );
         alert("Files uploaded successfully!");
       } else {
         alert("Failed to upload files");
@@ -322,10 +328,11 @@ function sendMessage(message = null, file_name = [], file_type = []) {
     });
 }
 
-
 function sendMessage(message = null) {
   if (!isConversationStarted || isWaitingForBot) {
-    console.log("Conversation has not started yet or still waiting for bot response.");
+    console.log(
+      "Conversation has not started yet or still waiting for bot response."
+    );
     return;
   }
 
@@ -345,8 +352,8 @@ function sendMessage(message = null) {
   formData.append("conversation_id", sessionStorage.getItem("conversation_id"));
 
   // Nếu có file đã upload, thêm thông tin file vào formData
-  if (uploadedFiles) {
-    uploadedFiles.forEach(file => {
+  if (fileInput) {
+    Array.from(fileInput).forEach((file) => {
       formData.append("file_id[]", file.file_id);
       formData.append("file_name[]", file.file_name);
     });
@@ -354,7 +361,7 @@ function sendMessage(message = null) {
 
   // Hiển thị tin nhắn của người dùng
   if (userInput) {
-    addMessageToChat("user", userInput, null);
+    addMessageToChat("user", userInput.value, null);
   }
 
   isWaitingForBot = true;
@@ -371,7 +378,7 @@ function sendMessage(message = null) {
 
   fetch(
     `/api/message?text=${encodeURIComponent(
-      messageText
+      userInput.value
     )}&user_id=${encodeURIComponent(user_id)}&session_id=${encodeURIComponent(
       session_id
     )}&conversation_id=${encodeURIComponent(
@@ -716,7 +723,7 @@ async function handleFileSelect(event) {
     if (!selectedFiles.includes(file.name)) {
       document.getElementById("loading-1").style.display = "block";
       document.getElementById("file_name_1").innerHTML = file.name;
-      const fileExtension = file.name.split('.').pop();
+      const fileExtension = file.name.split(".").pop();
       const conversation_id = sessionStorage.getItem("conversation_id");
       const formData = new FormData();
       formData.append("file", file);
@@ -730,13 +737,14 @@ async function handleFileSelect(event) {
         // headers: {
         //   "Content-Type": "multipart/form-data",
         // },
-        credentials: 'include',
+        credentials: "include",
         body: formData,
       })
         .then((response) => response.json())
         .then((data) => {
           console.log("upload file:", data);
           file_id.push(data.file_id);
+          localStorage.setItem("file_id", file_id);
           selectedFiles.push(file.name);
           document.getElementById("loading-1").style.display = "none";
           document.getElementById("file_name_1").innerHTML = "";
