@@ -3,6 +3,8 @@ let isWaitingForBot = false; // New flag to indicate waiting for bot response
 let conversationIdPromise = null;
 let feedbackMessageId = null;
 let selectedFiles = []; // Mảng lưu trữ các tệp đã chọn
+let conversationId = null;
+const file_id = [];
 
 window.onload = function () {
   console.log("Window loaded");
@@ -143,7 +145,7 @@ function checkOrCreateSession(user_id, session_id) {
         return getConversation(user_id, session_id);
       } else if (data.result === 0) {
         const start_time = new Date().toISOString();
-        const end_time = new Date(Date.now() + 60).toISOString();
+        const end_time = new Date(Date.now() + 3600000).toISOString();
         return createSession(user_id, session_id, start_time, end_time);
       } else {
         document.getElementById("chatMessages").innerHTML =
@@ -245,6 +247,7 @@ function getConversation(user_id, session_id) {
   })
     .then((response) => response.json())
     .then((data) => {
+      conversationId = data.result
       console.log("Conversation ID:", data.result);
       sessionStorage.setItem("conversation_id", data.result);
 
@@ -273,7 +276,7 @@ function handleKeyPress(event) {
   }
 }
 
-function sendMessage(message = null) {
+function sendMessage(message = null, file_name = [], file_type = []) {
   if (!isConversationStarted || isWaitingForBot) {
     console.log(
       "Conversation has not started yet or still waiting for bot response."
@@ -334,7 +337,7 @@ function sendMessage(message = null) {
       session_id
     )}&conversation_id=${encodeURIComponent(
       conversation_id
-    )}&file_id=${encodeURIComponent(file_id)}file_name=${encodeURIComponent(
+    )}&file_id=${encodeURIComponent(file_id)}&file_name=${encodeURIComponent(
       file_name
     )}&file_type=${encodeURIComponent(file_type)}`
   )
@@ -718,14 +721,46 @@ function removeFile(index) {
   updateFileList(); // Cập nhật danh sách hiển thị
 }
 
-function handleFileSelect(event) {
+async function handleFileSelect(event) {
   const fileList = document.getElementById("fileList");
   // fileList.innerHTML = ""; // Clear previous file list
 
   // Lưu các tệp mới vào mảng
   for (const file of event.target.files) {
     if (!selectedFiles.includes(file.name)) {
-      selectedFiles.push(file.name);
+      document.getElementById("loading-1").style.display = "block";
+      document.getElementById("file_name_1").innerHTML = file.name;
+      const fileExtension = file.name.split('.').pop();
+      const conversation_id = sessionStorage.getItem("conversation_id");
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("user_id", getCookie("user_id"));
+      formData.append("session_id", getCookie("session_id"));
+      formData.append("conversation_id", conversation_id);
+      formData.append("mime_type", fileExtension);
+
+      fetch("/api/upload_file", {
+        method: "POST",
+        // headers: {
+        //   "Content-Type": "multipart/form-data",
+        // },
+        credentials: 'include',
+        body: formData,
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          console.log("upload file:", data);
+          file_id.push(data.file_id);
+          selectedFiles.push(file.name);
+          document.getElementById("loading-1").style.display = "none";
+          document.getElementById("file_name_1").innerHTML = "";
+          updateFileList();
+        })
+        .catch((error) => {
+          console.log(error);
+          document.getElementById("loading-1").style.display = "none";
+          document.getElementById("file_name_1").innerHTML = "Loi ong oi";
+        });
     }
   }
 
