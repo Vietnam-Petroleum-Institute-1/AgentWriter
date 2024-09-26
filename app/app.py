@@ -1,3 +1,4 @@
+import csv
 from flask import (
     Flask,
     request,
@@ -210,13 +211,13 @@ def call_chat_messages_api_and_process_stream(
     }
 
     body = {
-        "inputs": {"file_name": file_name, "file_type": file_type, "chunk_id": file_id},
+        "inputs": {"chunk_id": file_id},
         "query": user_message,
         "response_mode": "streaming",
         "conversation_id": conversation_id if conversation_id else "",
         "user": user_id,
     }
-
+    app.logger.debug(f'Body: {body}')
     try:
         url = f"{CHATBOT_URL}/chat-messages"
         with requests.post(url, headers=headers, json=body, stream=True) as response:
@@ -297,8 +298,8 @@ def api_message():
     user_message = request.args.get("text")
     session_id = request.args.get("session_id")
     conversation_id = request.args.get("conversation_id")
-    file_id = request.form.getlist("file_id[]")
-    file_name = request.form.getlist("file_name[]")
+    file_id = request.args.get("file_id")
+    file_name = request.args.get("file_name")
     file_type = request.args.get("file_type")
 
     # Parse file_id as a JSON object
@@ -551,7 +552,7 @@ def api_conversation_id():
     session_id = request.json["session_id"]
 
     conversation_id = get_conversation_id(conn, user_id, session_id)
-
+    print(conversation_id)
     if conversation_id is None:
         return jsonify({"result": "Conversation ID not found"}), 404
     else:
@@ -625,12 +626,17 @@ def call_upload_api(mime_type, content):
 
         # Dữ liệu gửi qua API
     payload = {
-        "segment": {
-            "content": content,  # Nội dung được lấy từ file
-        }
+        "segments": [
+            {
+                "content": content,  # Nội dung được lấy từ file
+            }
+        ]
     }
 
-    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
+        "Content-Type": "application/json",
+    }
 
     # Gửi request POST đến API
     response = requests.post(url, headers=headers, json=payload)
@@ -668,50 +674,63 @@ def extract_docx_content(file_path):
 
 @app.route("/api/upload_file", methods=["POST"])
 def upload_file():
-    files = request.files.getlist("files[]")
+    user_id = request.form.get("user_id")
+    session_id = request.form.get("session_id")
+    conversation_id = request.form.get("conversation_id")
+    file_size = request.form.get("file_size")
+    mime_type = request.form.get("mime_type")
+    created_by = request.cookies.get("user_id")
 
-    if not files:
-        return jsonify({"error": "No file uploaded"}), 400
+    file = request.files["file"]  # Nhận file từ request
 
-    uploaded_files_info = []
-    conn = connect_db()
-
-    for file in files:
+    if file:
         # Sử dụng secure_filename để đảm bảo tên file an toàn
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
 
-        mime_type = file.mimetype
-        file_size = os.path.getsize(file_path)
+        # Trích xuất nội dung từ file dựa trên loại MIME type
+        content = ""
+        if mime_type == "csv":
+            content = extract_csv_content(file_path)
+        elif mime_type == "docx":
+            content = extract_docx_content(file_path)
+        else:
+            return jsonify({"error": "Unsupported MIME type"}), 400
 
         # Gọi API upload với nội dung trích xuất từ file
-        index_node_hash, error = call_upload_api(mime_type, file.read())
+        index_node_hash, error = call_upload_api(mime_type, content)
         if error:
             return jsonify({"error": error}), 400
 
         # Insert thông tin file vào cơ sở dữ liệu
+        print("Index node hash: ", index_node_hash)
+        conn = connect_db()
         insert_file(
             conn,
             index_node_hash,
-            None,  # user_id không cần cho việc upload
-            None,  # session_id không cần cho việc upload
-            None,  # conversation_id không cần cho việc upload
+            user_id,
+            session_id,
+            conversation_id,
             filename,
             file_path,
             file_size,
             mime_type,
-            None  # created_by không cần thiết khi upload file
+            created_by,
+        )
+        conn.close()
+
+        return (
+            jsonify(
+                {
+                    "message": f"File {filename} uploaded successfully",
+                    "file_id": index_node_hash,
+                }
+            ),
+            200,
         )
 
-        uploaded_files_info.append({"file_id": index_node_hash, "file_name": filename})
-
-    conn.close()
-
-    return jsonify({
-        "message": f"{len(uploaded_files_info)} files uploaded successfully",
-        "uploaded_files": uploaded_files_info
-    }), 200
+    return jsonify({"error": "No file uploaded"}), 400
 
 
 if __name__ == "__main__":
