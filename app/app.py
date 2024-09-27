@@ -405,7 +405,7 @@ def start_conversation():
         payload = {
             "segments": [
                 {
-                    "content": "None",  # Nội dung được lấy từ file
+                    "content": f'{datetime.utcnow().timestamp()}',  # Nội dung được lấy từ file
                 }
             ]
         }
@@ -424,12 +424,15 @@ def start_conversation():
             if "data" in response_json and len(response_json["data"]) > 0:
                 segment_id = response_json["data"][0].get("id", "")
 
-        # Gọi hàm xử lý streaming
-        result_answer, conversation_id, message_id = (
-            call_chat_messages_api_and_process_stream(
-                "Xin chào", user_id, segment_id, conversation_id
+            # Gọi hàm xử lý streaming
+            result_answer, conversation_id, message_id = (
+                call_chat_messages_api_and_process_stream(
+                    "Xin chào", user_id, segment_id, conversation_id
+                )
             )
-        )
+
+        else:
+            result_answer = False
 
         app.logger.debug(f"conversation_id: {conversation_id}")
 
@@ -754,11 +757,13 @@ def update_file():
     
     url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
     app.logger.debug(f"segment_id: {segment_id}, content: {content} \n url: {url}")
+    if not segment_id or not content:
+        return jsonify({"error": "segment_id or updated_file_id missing"}), 400
         # Dữ liệu gửi qua API
     payload = {
         "segment": 
             {
-                "content": content, 
+                "content": f'{content}', 
                 "enabled": "True"
 
             }
