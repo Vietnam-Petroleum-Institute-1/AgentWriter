@@ -425,13 +425,16 @@ def start_conversation():
         # Kiểm tra nếu request thành công
         if response.status_code == 200:
             response_json = response.json()
+            # Trích xuất `index_node_hash`
             if "data" in response_json and len(response_json["data"]) > 0:
+                index_node_hash = response_json["data"][0].get("index_node_hash", "")
+                file_id = index_node_hash
                 segment_id = response_json["data"][0].get("id", "")
 
         # Gọi hàm xử lý streaming
         result_answer, conversation_id, message_id = (
             call_chat_messages_api_and_process_stream(
-                "Xin chào", user_id, segment_id, conversation_id
+                "Xin chào", user_id, file_id, conversation_id
             )
         )
 
@@ -473,6 +476,7 @@ def start_conversation():
                 "conversation_id": conversation_id,
                 "message_id": message_id,
                 "result": result_answer,
+                "start_chunk_id": file_id,
                 "start_segment_id": segment_id
             }
         )
@@ -664,9 +668,10 @@ def call_upload_api(mime_type, content):
     # Kiểm tra nếu request thành công
     if response.status_code == 200:
         response_json = response.json()
+        # Trích xuất `index_node_hash`
         if "data" in response_json and len(response_json["data"]) > 0:
-            file_id = response_json["data"][0].get("id", "")
-            return file_id, None
+            index_node_hash = response_json["data"][0].get("index_node_hash", "")
+            return index_node_hash, None
         return None, "No data returned from API"
     else:
         return None, f"Failed to upload. Status code: {response.status_code}"
@@ -718,16 +723,16 @@ def upload_file():
             return jsonify({"error": "Unsupported MIME type"}), 400
 
         # Gọi API upload với nội dung trích xuất từ file
-        file_id, error = call_upload_api(mime_type, content)
+        index_node_hash, error = call_upload_api(mime_type, content)
         if error:
             return jsonify({"error": error}), 400
 
         # Insert thông tin file vào cơ sở dữ liệu
-        print("Index node hash: ", file_id)
+        print("Index node hash: ", index_node_hash)
         conn = connect_db()
         insert_file(
             conn,
-            file_id,
+            index_node_hash,
             user_id,
             session_id,
             conversation_id,
@@ -743,7 +748,7 @@ def upload_file():
             jsonify(
                 {
                     "message": f"File {filename} uploaded successfully",
-                    "file_id": file_id,
+                    "file_id": index_node_hash,
                 }
             ),
             200,
