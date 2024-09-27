@@ -756,17 +756,18 @@ def upload_file():
 def update_file():
     segment_id = request.form.get("segment_id")
     content = request.form.get("updated_file_id")
-    app.logger.debug(f"segment_id: {segment_id}, content: {content}")
+    
     url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
-
+    app.logger.debug(f"segment_id: {segment_id}, content: {content} \n url: {url}")
         # Dữ liệu gửi qua API
     payload = {
         "segment": 
             {
-                "content": content,  # Nội dung được lấy từ file
+                "content": content, 
+                "enabled": "True"
+
             }
         }
-
     headers = {
         "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
         "Content-Type": "application/json",
