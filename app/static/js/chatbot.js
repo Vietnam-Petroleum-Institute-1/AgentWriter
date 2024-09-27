@@ -62,7 +62,7 @@ function loadTranscripts(user_id, session_id) {
     body: JSON.stringify({ user_id, session_id }),
   })
     .then((response) => response.json())
-    .then((data) => {
+    .then(async (data) => {
       console.log("Transcripts data received:", data);
 
       let transcripts = data.transcripts;
@@ -127,10 +127,10 @@ function getCookie(name) {
   return null;
 }
 
-function checkOrCreateSession(user_id, session_id) {
+async function checkOrCreateSession(user_id, session_id) {
   console.log("Checking or creating session");
   showWaitingBubble();
-  return fetch("/api/session_exist", {
+  return await fetch("/api/session_exist", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -138,11 +138,11 @@ function checkOrCreateSession(user_id, session_id) {
     body: JSON.stringify({ user_id, session_id }),
   })
     .then((response) => response.json())
-    .then((data) => {
+    .then(async (data) => {
       console.log("Session existence check:", data);
       if (data.result === 1) {
         document.getElementById("chatContainer").style.display = "flex";
-        return getConversation(user_id, session_id);
+        return await getConversation(user_id, session_id);
       } else if (data.result === 0) {
         const start_time = new Date().toISOString();
         const end_time = new Date(Date.now() + 3600000).toISOString();
@@ -201,7 +201,7 @@ function startConversation(user_id, session_id) {
     body: JSON.stringify({ user_id, session_id }),
   })
     .then((response) => response.json())
-    .then((data) => {
+    .then(async (data) => {
       console.log("Start conversation result:", data);
       const conversation_id = data.conversation_id;
       const start_segment_id = data.start_segment_id;
@@ -238,10 +238,10 @@ function startConversation(user_id, session_id) {
     });
 }
 
-function getConversation(user_id, session_id) {
+async function getConversation(user_id, session_id) {
   console.log("Getting conversation");
   showWaitingBubble();
-  return fetch("/api/conversation_id", {
+  await fetch("/api/conversation_id", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -249,7 +249,7 @@ function getConversation(user_id, session_id) {
     body: JSON.stringify({ user_id, session_id }),
   })
     .then((response) => response.json())
-    .then((data) => {
+    .then(async (data) => {
       conversationId = data.result;
       console.log("Conversation ID:", data.result);
       sessionStorage.setItem("conversation_id", data.result);
@@ -697,11 +697,28 @@ function updateFileList() {
     fileNameSpan.textContent =
       fileName.length > 20 ? fileName.slice(0, 20) + "..." : fileName; // Giới hạn 20 ký tự
 
-    // Tạo nút xóa
+    // Tạo nút xóa, bấm x để xoá
     const deleteButton = document.createElement("button");
+    deleteButton.id = file_id[index];
     deleteButton.textContent = "X";
     deleteButton.className = "delete-button";
-    deleteButton.onclick = () => removeFile(index); // Gán sự kiện xóa cho nút
+    deleteButton.onclick = () => {
+      //Lấy segment_id từ session storage, lấy id từ file, đẩy vào api update_upload_file
+      const formDataUpLoadFile = new FormData();
+      formDataUpLoadFile.append(
+        "segment_id",
+        sessionStorage.getItem("start_segment_id")
+      );
+      formDataUpLoadFile.append("updated_file_id", file_id[index]);
+
+      //đẩy vào api update_upload_file kèm với post file
+      fetch("/api/update_upload_file", {
+        method: "POST",
+        credentials: "include",
+        body: formDataUpLoadFile,
+      });
+      removeFile(index);
+    };
 
     listItem.appendChild(fileNameSpan);
     listItem.appendChild(deleteButton);
