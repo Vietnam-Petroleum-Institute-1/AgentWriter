@@ -273,9 +273,11 @@ async function getConversation(user_id, session_id) {
     });
 }
 
-function handleKeyPress(event) {
+async function handleKeyPress(event) {
   if (event.key === "Enter" && !isWaitingForBot && isConversationStarted) {
-    sendMessage();
+    await sendMessage();
+    // Xóa nội dung input sau khi sendMessage() hoàn thành
+    document.getElementById("userInput").value = "";
   }
 }
 
