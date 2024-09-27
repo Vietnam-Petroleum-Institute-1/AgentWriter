@@ -298,10 +298,6 @@ def api_message():
     user_message = request.args.get("text")
     session_id = request.args.get("session_id")
     conversation_id = request.args.get("conversation_id")
-    file_id = request.args.get("file_id")
-
-    # Parse file_id as a JSON object
-    # file_id = json.loads(file_id)
 
     end_session(conn, user_id, session_id)
 
@@ -324,7 +320,7 @@ def api_message():
         # Gọi API và xử lý streaming response
         result_answer, conversation_id, message_id = (
             call_chat_messages_api_and_process_stream(
-                user_message, user_id, file_id, conversation_id
+                user_message, user_id, "", conversation_id
             )
         )
 
