@@ -204,7 +204,7 @@ function startConversation(user_id, session_id) {
     .then((data) => {
       console.log("Start conversation result:", data);
       const conversation_id = data.conversation_id;
-      const segment_id = data.segment_id;
+      const start_segment_id = data.start_segment_id;
 
       sessionStorage.setItem("start_segment_id", start_segment_id);
       sessionStorage.setItem("conversation_id", conversation_id);
