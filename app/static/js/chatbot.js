@@ -755,6 +755,20 @@ async function handleFileSelect(event) {
           document.getElementById("loading-1").style.display = "none";
           document.getElementById("file_name_1").innerHTML = "Loi ong oi";
         });
+      //Lấy segment_id từ session storage, lấy id từ file, đẩy vào api update_upload_file
+      const formDataUpLoadFile = new FormData();
+      formDataUpLoadFile.append(
+        "segment_id",
+        sessionStorage.getItem("start_segment_id")
+      );
+      formDataUpLoadFile.append("updated_file_id", file.file_id);
+
+      //đẩy vào api update_upload_file kèm với post file
+      fetch("/api/update_upload_file", {
+        method: "POST",
+        credentials: "include",
+        body: formDataUpLoadFile,
+      });
     }
   }
 
