@@ -2,8 +2,8 @@ import requests
  
 # Các thông tin cần thiết
 API_KEY = 'dataset-oB18KobCvufR8Gf0YjlKW9Ms'
-DATASET_ID = '18cb9306-32e8-487a-993c-586b2c563cc3'
-DOCUMENT_ID = '59abce73-608a-459c-a47d-0d9276ea6b83'
+DATASET_ID = '0770fc48-186c-45a8-8a85-2f80abeb593a'
+DOCUMENT_ID = '8a81cf1f-8dc1-42dc-88ac-5fe641604392'
 BASE_URL = 'http://103.75.180.15/v1'
  
 # Hàm lấy danh sách các segments của document
@@ -58,7 +58,8 @@ def get_segments2(dataset_id, document_id):
         response = response.json()['data']
         for segment in response:
             segment_id = segment['id']
-            print(segment_id)
+            segment_index_node_hash = segment['index_node_hash']
+            print(segment_id, segment_index_node_hash)
     else:
         print(f"Error fetching segments: {response.status_code} - {response.text}")
         return []
