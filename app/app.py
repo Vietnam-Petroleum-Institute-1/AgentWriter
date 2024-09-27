@@ -753,11 +753,11 @@ def upload_file():
 @app.route("/api/update_upload_file", methods=["POST"])
 def update_file():
     segment_id = request.form.get("segment_id")
-    content = request.form.get("updated_file_id")
+    content = request.form.getlist("updated_file_id")
     
     url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
     app.logger.debug(f"segment_id: {segment_id}, content: {content} \n url: {url}")
-    if not segment_id or not content:
+    if not segment_id or content == 'undefined' or not content:
         return jsonify({"error": "segment_id or updated_file_id missing"}), 400
         # Dữ liệu gửi qua API
     payload = {
