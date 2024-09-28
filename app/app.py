@@ -750,11 +750,17 @@ def upload_file():
 
     return jsonify({"error": "No file uploaded"}), 400
 
+import re
+import random
 @app.route("/api/update_upload_file", methods=["POST"])
 def update_file():
     segment_id = request.form.get("segment_id")
-    content = request.form.getlist("updated_file_id")
-    
+    content = request.form.get("updated_file_id")
+    # Sử dụng regex để chia đoạn văn thành các từ (loại bỏ dấu câu)
+    words = re.findall(r'\b\w+\b', content)
+
+    # Lấy ngẫu nhiên 10 từ trong danh sách
+    random_keywords = random.sample(words, min(len(words), 10)) 
     url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
     app.logger.debug(f"segment_id: {segment_id}, content: {content} \n url: {url}")
     if not segment_id or content == 'undefined' or not content:
@@ -764,7 +770,8 @@ def update_file():
         "segment": 
             {
                 "content": f'{content}', 
-                "enabled": "True"
+                "keywords": random_keywords,
+                "enabled": "true"
 
             }
         }
@@ -776,6 +783,7 @@ def update_file():
     # Gửi request POST đến API
     response = requests.post(url, headers=headers, json=payload)
 
+    app.logger.debug(f'response: {response.json()}')
     # Kiểm tra nếu request thành công
     if response.status_code == 200:
         return (
