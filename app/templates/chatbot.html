@@ -19,7 +19,10 @@
 
   <div class="chat-container" id="chatContainer">
     <div class="chat-header">
-      <img src="{{ url_for('static', filename='images/Logo_Petrovietnam.svg.png') }}" alt="Logo">
+      <div class=" rounded-full w-14 h-14 flex items-center justify-center bg-white">
+        <img class="w-14 h-14 rounded-full" src="{{ url_for('static', filename='images/Logo_Petrovietnam.svg.png') }}"
+          alt="Logo">
+      </div>
       PVPower Assistant
     </div>
     <div class="chat-messages" id="chatMessages"></div>
@@ -49,7 +52,8 @@
           <span class="sr-only">Loading...</span>
         </div>
       </div>
-      <input type="text" id="userInput" class="userInput" placeholder="Xin mời bạn hỏi..." onkeypress="handleKeyPress(event)" />
+      <input type="text" id="userInput" class="userInput" placeholder="Xin mời bạn hỏi..."
+        onkeypress="handleKeyPress(event)" />
       <button id="sendButton" onclick="sendMessage()">Send</button>
     </div>
   </div>
