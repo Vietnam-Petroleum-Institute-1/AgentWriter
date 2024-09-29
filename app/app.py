@@ -799,12 +799,15 @@ def update_file():
     
 @app.route("/api/download_file", methods=["POST"])
 def download_file():
-    download_segment_id = request.form.get("download_segment_id")
-    url = f"{CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments/"
+    data = request.json  # Sử dụng request.json thay vì request.form
+    download_segment_id = data.get("download_segment_id")
+    url = f"{CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments"
     app.logger.debug(f"segment_id: {download_segment_id}")
+    
     if not download_segment_id or download_segment_id == 'undefined':
         return jsonify({"error": "segment_id or updated_file_id missing"}), 400
-        # Dữ liệu gửi qua API
+
+    # Dữ liệu gửi qua API
     headers = {
         "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
         "Content-Type": "application/json",
@@ -812,25 +815,25 @@ def download_file():
 
     # Gửi request POST đến API
     response = requests.get(url, headers=headers)
-
-    app.logger.debug(f'response: {response.json()}')
-    # Kiểm tra nếu request thành công
+    
+    # Kiểm tra mã trạng thái HTTP trước khi gọi .json()
     if response.status_code == 200:
-        response = response.json()['data']
-        for segment in response:
-            segment_id = segment['id']
-            content = segment['content']
-            if download_segment_id in segment_id:
-                return (
-                jsonify(
-                    {
-                        "message": f'{content}',
-                    }
-                ),
-                200,
-            )
+        try:
+            response_data = response.json().get('data', [])
+            app.logger.debug(f'response data: {response_data}')
+            for segment in response_data:
+                segment_id = segment['id']
+                content = segment['content']
+                if download_segment_id in segment_id:
+                    return jsonify({"message": f'{content}'}), 200
+        except ValueError as e:
+            app.logger.error(f"Error decoding JSON: {e}")
+            return jsonify({"error": "Failed to decode response"}), 500
+    elif response.status_code == 404:
+        return jsonify({"error": "Segments not found"}), 404
     else:
-        return jsonify({"error": "No file downloaded"}), 400
+        app.logger.error(f"Unexpected status code: {response.status_code}, Response: {response.text}")
+        return jsonify({"error": "Failed to download file"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
