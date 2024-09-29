@@ -798,7 +798,7 @@ def update_file():
         return jsonify({"error": "No file uploaded"}), 400
     
 @app.route("/api/download_file", methods=["POST"])
-def update_file():
+def download_file():
     download_segment_id = request.form.get("download_segment_id")
     url = f"{CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments/"
     app.logger.debug(f"segment_id: {download_segment_id}")
