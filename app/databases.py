@@ -15,7 +15,7 @@ def connect_db():
         dbname="agent_writer",
         user="phuongpd",
         password="vdkvn22.05",
-        host=HOST,
+        host="localhost",
         port="5432",
     )
 

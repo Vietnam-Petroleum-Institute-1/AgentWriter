@@ -466,6 +466,23 @@ function addMessageToChat(sender, message, messageId) {
     feedbackButtons.appendChild(likeButton);
     feedbackButtons.appendChild(dislikeButton);
     feedbackButtons.appendChild(copyButtonContainer);
+
+    //Nếu messages của chat bot chứa uuid:
+    segment_id = containsUUID(message);
+    const downloadButtonContainer = document.createElement("div");
+    if (segment_id != null) {
+      console.log("UUID found!");
+      // Nút Download
+      const downloadButton = document.createElement("button");
+      downloadButton.classList.add("download-button");
+      downloadButton.innerHTML = '<i class="fas fa-download"></i>';
+      downloadButton.onclick = () => downloadContent(segment_id);
+
+      feedbackButtons.appendChild(downloadButton);
+    } else {
+      console.log("No UUID found.");
+    }
+
     messageElement.appendChild(feedbackButtons);
   }
 
@@ -850,4 +867,86 @@ async function handleFileSelect(event) {
 
   // Cập nhật danh sách hiển thị
   updateFileList();
+}
+
+// Hàm check messgae trả về có uuid không, nếu có hiển thị nút download
+function containsUUID(str) {
+  const uuidRegex =
+    /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
+  const match = str.match(uuidRegex);
+  // Nếu tìm thấy, trả về UUID, nếu không, trả về null
+  return match ? match[0] : null;
+}
+
+function downloadContent(segment_id) {
+  console.log("segment_id=" + segment_id);
+
+  fetch("/api/download_file", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ download_segment_id: segment_id }),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      if (data.message) {
+        const docContent = data.message; // Giả sử đây là nội dung bạn muốn lưu
+        const blob = new Blob([docContent], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }); // Tạo Blob với kiểu file docx
+        const url = URL.createObjectURL(blob); // Tạo URL cho Blob
+
+        // Tạo một liên kết tạm thời
+        const a = document.createElement("a");
+        a.href = url; // Đặt thuộc tính href của liên kết
+        a.download = "downloaded_segment.txt"; // Đặt tên file khi tải xuống
+
+        // Thêm liên kết vào document và kích hoạt click
+        document.body.appendChild(a);
+        a.click();
+
+        // Gỡ bỏ liên kết sau khi tải xong
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        console.error("Lỗi xảy ra:", data.error);
+        //alert(`Lỗi: ${data.error}`);
+      }
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      // alert("Có lỗi xảy ra khi dpwnload file.");
+    });
+}
+
+// Hàm tạo file .docx và tải về
+function createDocxFile(content) {
+  var zip = new PizZip();
+  var doc = new window.docxtemplater().loadZip(zip);
+
+  doc.setData({
+    text: content,
+  });
+
+  try {
+    doc.render();
+  } catch (error) {
+    console.error("Error while rendering docx:", error);
+  }
+
+  // Lấy nội dung của file docx dưới dạng blob
+  var out = doc.getZip().generate({
+    type: "blob",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+
+  // Tạo liên kết tải file docx
+  saveAs(out, "downloaded_segment.docx");
 }
