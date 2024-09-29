@@ -149,6 +149,7 @@ html {
 
 /* Style for feedback buttons */
 .feedback-buttons {
+  min-width: 60%;
   display: flex;
   align-items: center;
   margin-top: 8px;
@@ -392,4 +393,8 @@ html {
     border: 1px solid #000000;
     border-radius: 8px;
   }
+}
+
+.download-button {
+  margin-left: auto !important;
 }
