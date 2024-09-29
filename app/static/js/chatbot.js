@@ -255,7 +255,7 @@ async function getConversation(user_id, session_id) {
 
       if (files) {
         for (let file of files) {
-          file_id.push(file[0])
+          file_id.push(file[0]);
           selectedFiles.push(file[1]);
         }
       }
@@ -468,21 +468,19 @@ function addMessageToChat(sender, message, messageId) {
     feedbackButtons.appendChild(copyButtonContainer);
 
     //Nếu messages của chat bot chứa uuid:
+    const downloadButton = document.createElement("button");
+    downloadButton.classList.add("download-button");
     segment_id = containsUUID(message);
     const downloadButtonContainer = document.createElement("div");
     if (segment_id != null) {
       console.log("UUID found!");
       // Nút Download
-      const downloadButton = document.createElement("button");
-      downloadButton.classList.add("download-button");
       downloadButton.innerHTML = '<i class="fas fa-download"></i>';
       downloadButton.onclick = () => downloadContent(segment_id);
-
-      feedbackButtons.appendChild(downloadButton);
     } else {
       console.log("No UUID found.");
     }
-
+    feedbackButtons.appendChild(downloadButton);
     messageElement.appendChild(feedbackButtons);
   }
 
@@ -726,7 +724,7 @@ function updateFileList() {
           <img src="static/images/docx.png" class="w-8 h-8"/>
           <h1 class="truncate max-w-[140px]">${fileName}</h1>
         </div>
-      `
+      `;
       // Tạo nút xóa, bấm x để xoá
       const deleteButton = document.createElement("button");
       deleteButton.id = file_id[index];
@@ -760,7 +758,7 @@ function updateFileList() {
           <img src="static/images/csv-svgrepo-com.svg" class="w-8 h-8"/>
           <h1 class="truncate max-w-[140px]">${fileName}</h1>
         </div>
-      `
+      `;
       // Tạo nút xóa, bấm x để xoá
       const deleteButton = document.createElement("button");
       deleteButton.id = file_id[index];
@@ -896,16 +894,15 @@ function downloadContent(segment_id) {
     })
     .then((data) => {
       if (data.message) {
-        const docContent = data.message; // Giả sử đây là nội dung bạn muốn lưu
+        const docContent = data.message;
         const blob = new Blob([docContent], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        }); // Tạo Blob với kiểu file docx
-        const url = URL.createObjectURL(blob); // Tạo URL cho Blob
+          type: "text/markdown",
+        });
+        const url = URL.createObjectURL(blob);
 
-        // Tạo một liên kết tạm thời
         const a = document.createElement("a");
-        a.href = url; // Đặt thuộc tính href của liên kết
-        a.download = "downloaded_segment.txt"; // Đặt tên file khi tải xuống
+        a.href = url;
+        a.download = "downloaded_segment.md"; // Đặt tên file khi tải xuống
 
         // Thêm liên kết vào document và kích hoạt click
         document.body.appendChild(a);
