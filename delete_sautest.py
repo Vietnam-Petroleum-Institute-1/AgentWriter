@@ -46,8 +46,8 @@ def delete_all_segments(dataset_id, document_id):
 # delete_all_segments(DATASET_ID, DOCUMENT_ID)
 
 # Hàm lấy danh sách các segments của document
-def get_segments2(dataset_id, document_id):
-    url = f'{BASE_URL}/datasets/18cb9306-32e8-487a-993c-586b2c563cc3/documents/59abce73-608a-459c-a47d-0d9276ea6b83/segments'
+def get_segments2(download_segment_id):
+    url = f'{BASE_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments'
     headers = {
         'Authorization': f'Bearer {API_KEY}',
         'Content-Type': 'application/json',
@@ -59,12 +59,11 @@ def get_segments2(dataset_id, document_id):
         for segment in response:
             segment_id = segment['id']
             content = segment['content']
-            # if 'dd5f6caf-8350-4b89-9765-5cb9c0fbbc9d' in segment_id:
-            #     print(segment_id, content)
-            print(segment_id, content)
+            if download_segment_id in segment_id:
+                return content
     else:
         print(f"Error fetching segments: {response.status_code} - {response.text}")
-        return []
+        return
 get_segments2(DATASET_ID, DOCUMENT_ID)
 
 # 53ba5164-c4a6-434a-aca1-82a6fab4dee6, d67ca0a5-9eca-4e0e-99cf-e7ef0ea11399

@@ -796,6 +796,41 @@ def update_file():
     )
     else:
         return jsonify({"error": "No file uploaded"}), 400
+    
+@app.route("/api/download_file", methods=["POST"])
+def update_file():
+    download_segment_id = request.form.get("download_segment_id")
+    url = f"{CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments/"
+    app.logger.debug(f"segment_id: {download_segment_id}")
+    if not download_segment_id or download_segment_id == 'undefined':
+        return jsonify({"error": "segment_id or updated_file_id missing"}), 400
+        # Dữ liệu gửi qua API
+    headers = {
+        "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
+        "Content-Type": "application/json",
+    }
+
+    # Gửi request POST đến API
+    response = requests.post(url, headers=headers)
+
+    app.logger.debug(f'response: {response.json()}')
+    # Kiểm tra nếu request thành công
+    if response.status_code == 200:
+        response = response.json()['data']
+        for segment in response:
+            segment_id = segment['id']
+            content = segment['content']
+            if download_segment_id in segment_id:
+                return (
+                jsonify(
+                    {
+                        "message": f'{content}',
+                    }
+                ),
+                200,
+            )
+    else:
+        return jsonify({"error": "No file downloaded"}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
