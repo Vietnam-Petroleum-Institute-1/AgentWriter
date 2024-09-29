@@ -811,7 +811,7 @@ def download_file():
     }
 
     # Gửi request POST đến API
-    response = requests.post(url, headers=headers)
+    response = requests.get(url, headers=headers)
 
     app.logger.debug(f'response: {response.json()}')
     # Kiểm tra nếu request thành công
