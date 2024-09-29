@@ -6,3 +6,4 @@ app/__pycache__/app.cpython-311.pyc
 app/__pycache__/databases.cpython-311.pyc
 app/databases.py
 node_modules/
+app/static/uploads/
