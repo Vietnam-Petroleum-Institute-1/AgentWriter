@@ -24,6 +24,7 @@ from databases import (
     insert_user,
     get_message_lastest_timestamp,
     get_transcripts,
+    get_file_by_conversation,
     add_conversation,
     get_conversation_id,
     write_feedback,
@@ -211,13 +212,13 @@ def call_chat_messages_api_and_process_stream(
     }
 
     body = {
-        "inputs": {"chunk_id":file_id},
+        "inputs": {"chunk_id": file_id},
         "query": user_message,
         "response_mode": "streaming",
         "conversation_id": conversation_id if conversation_id else "",
         "user": user_id,
     }
-    app.logger.debug(f'Body: {body}')
+    app.logger.debug(f"Body: {body}")
     try:
         url = f"{CHATBOT_URL}/chat-messages"
         with requests.post(url, headers=headers, json=body, stream=True) as response:
@@ -401,11 +402,11 @@ def start_conversation():
 
         url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments"
 
-            # Dữ liệu gửi qua API
+        # Dữ liệu gửi qua API
         payload = {
             "segments": [
                 {
-                    "content": f'{datetime.utcnow().timestamp()}',  # Nội dung được lấy từ file
+                    "content": f"{datetime.utcnow().timestamp()}",  # Nội dung được lấy từ file
                 }
             ]
         }
@@ -472,7 +473,7 @@ def start_conversation():
                 "conversation_id": conversation_id,
                 "message_id": message_id,
                 "result": result_answer,
-                "start_segment_id": segment_id
+                "start_segment_id": segment_id,
             }
         )
 
@@ -497,6 +498,7 @@ def api_user():
         insert_user(conn, user_id, user_id)
     conn.close()
     return jsonify({"result": "User added successfully"})
+
 
 @app.route("/api/user_exist", methods=["POST"])
 def user_exist():
@@ -571,11 +573,11 @@ def api_conversation_id():
     session_id = request.json["session_id"]
 
     conversation_id = get_conversation_id(conn, user_id, session_id)
-    print(conversation_id)
+    upload_files = get_file_by_conversation(conn, conversation_id[0])
     if conversation_id is None:
         return jsonify({"result": "Conversation ID not found"}), 404
     else:
-        return jsonify({"result": conversation_id[0]})
+        return jsonify({"result": conversation_id[0], "files": upload_files})
 
 
 @app.route("/api/feedback", methods=["POST"])
@@ -750,31 +752,32 @@ def upload_file():
 
     return jsonify({"error": "No file uploaded"}), 400
 
+
 import re
 import random
+
+
 @app.route("/api/update_upload_file", methods=["POST"])
 def update_file():
     segment_id = request.form.get("segment_id")
     content = request.form.get("updated_file_id")
     # Sử dụng regex để chia đoạn văn thành các từ (loại bỏ dấu câu)
-    words = re.findall(r'\b\w+\b', content)
+    words = re.findall(r"\b\w+\b", content)
 
     # Lấy ngẫu nhiên 10 từ trong danh sách
-    random_keywords = random.sample(words, min(len(words), 10)) 
+    random_keywords = random.sample(words, min(len(words), 10))
     url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
     app.logger.debug(f"segment_id: {segment_id}, content: {content} \n url: {url}")
-    if not segment_id or content == 'undefined' or not content:
+    if not segment_id or content == "undefined" or not content:
         return jsonify({"error": "segment_id or updated_file_id missing"}), 400
         # Dữ liệu gửi qua API
     payload = {
-        "segment": 
-            {
-                "content": f'{content}', 
-                "keywords": random_keywords,
-                "enabled": "true"
-
-            }
+        "segment": {
+            "content": f"{content}",
+            "keywords": random_keywords,
+            "enabled": "true",
         }
+    }
     headers = {
         "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
         "Content-Type": "application/json",
@@ -783,28 +786,29 @@ def update_file():
     # Gửi request POST đến API
     response = requests.post(url, headers=headers, json=payload)
 
-    app.logger.debug(f'response: {response.json()}')
+    app.logger.debug(f"response: {response.json()}")
     # Kiểm tra nếu request thành công
     if response.status_code == 200:
         return (
-        jsonify(
-            {
-                "message": f"Chunk updated successfully",
-            }
-        ),
-        200,
-    )
+            jsonify(
+                {
+                    "message": f"Chunk updated successfully",
+                }
+            ),
+            200,
+        )
     else:
         return jsonify({"error": "No file uploaded"}), 400
-    
+
+
 @app.route("/api/download_file", methods=["POST"])
 def download_file():
     data = request.json  # Sử dụng request.json thay vì request.form
     download_segment_id = data.get("download_segment_id")
     url = f"{CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments"
     app.logger.debug(f"segment_id: {download_segment_id}")
-    
-    if not download_segment_id or download_segment_id == 'undefined':
+
+    if not download_segment_id or download_segment_id == "undefined":
         return jsonify({"error": "segment_id or updated_file_id missing"}), 400
 
     # Dữ liệu gửi qua API
@@ -815,25 +819,40 @@ def download_file():
 
     # Gửi request POST đến API
     response = requests.get(url, headers=headers)
-    
+
     # Kiểm tra mã trạng thái HTTP trước khi gọi .json()
     if response.status_code == 200:
         try:
-            response_data = response.json().get('data', [])
-            app.logger.debug(f'response data: {response_data}')
+            response_data = response.json().get("data", [])
+            app.logger.debug(f"response data: {response_data}")
             for segment in response_data:
-                segment_id = segment['id']
-                content = segment['content']
+                segment_id = segment["id"]
+                content = segment["content"]
                 if download_segment_id in segment_id:
-                    return jsonify({"message": f'{content}'}), 200
+                    return jsonify({"message": f"{content}"}), 200
         except ValueError as e:
             app.logger.error(f"Error decoding JSON: {e}")
             return jsonify({"error": "Failed to decode response"}), 500
     elif response.status_code == 404:
         return jsonify({"error": "Segments not found"}), 404
     else:
-        app.logger.error(f"Unexpected status code: {response.status_code}, Response: {response.text}")
+        app.logger.error(
+            f"Unexpected status code: {response.status_code}, Response: {response.text}"
+        )
         return jsonify({"error": "Failed to download file"}), 500
+
+
+@app.route("/api/remove_file/<file_id>", methods=["DELETE"])
+def remove_file(file_id):
+    conn = connect_db()
+    if file_id:
+        # Logic xử lý xóa file dựa trên file_id
+        delete_file(conn, file_id)
+        conn.close()
+        return jsonify({"message": f"File {file_id} has been deleted."})
+
+    return jsonify({"error": "File ID is required"}), 400
+
 
 if __name__ == "__main__":
     app.run(debug=True)

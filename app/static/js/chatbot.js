@@ -4,7 +4,7 @@ let conversationIdPromise = null;
 let feedbackMessageId = null;
 let selectedFiles = []; // Mảng lưu trữ các tệp đã chọn
 let conversationId = null;
-const file_id = [];
+var file_id = [];
 
 window.onload = function () {
   console.log("Window loaded");
@@ -251,9 +251,19 @@ async function getConversation(user_id, session_id) {
     .then((response) => response.json())
     .then(async (data) => {
       conversationId = data.result;
+      const files = data.files;
+
+      if (files) {
+        for (let file of files) {
+          file_id.push(file[0])
+          selectedFiles.push(file[1]);
+        }
+      }
+
+      updateFileList();
+
       console.log("Conversation ID:", data.result);
       sessionStorage.setItem("conversation_id", data.result);
-
       const userInput = document.getElementById("userInput");
       const sendButton = document.getElementById("sendButton");
       if (userInput && sendButton) {
@@ -272,12 +282,9 @@ async function getConversation(user_id, session_id) {
       hideWaitingBubble();
     });
 }
-
-async function handleKeyPress(event) {
+function handleKeyPress(event) {
   if (event.key === "Enter" && !isWaitingForBot && isConversationStarted) {
-    await sendMessage();
-    // Xóa nội dung input sau khi sendMessage() hoàn thành
-    document.getElementById("userInput").value = "";
+    sendMessage();
   }
 }
 
@@ -296,7 +303,6 @@ function sendMessage(message = null, file_name = [], file_type = []) {
     alert("Vui lòng nhập câu hỏi hoặc chọn file!");
     return;
   }
-
   const formData = new FormData();
   formData.append("message", userInput.value);
 
@@ -346,25 +352,26 @@ function sendMessage(message = null) {
     alert("Vui lòng nhập câu hỏi hoặc upload file trước!");
     return;
   }
+  // const formData = new FormData();
+  // formData.append("text", userInput);
+  // formData.append("user_id", getCookie("user_id"));
+  // formData.append("session_id", getCookie("session_id"));
+  // formData.append("conversation_id", sessionStorage.getItem("conversation_id"));
 
-  const formData = new FormData();
-  formData.append("text", userInput);
-  formData.append("user_id", getCookie("user_id"));
-  formData.append("session_id", getCookie("session_id"));
-  formData.append("conversation_id", sessionStorage.getItem("conversation_id"));
-
-  // Nếu có file đã upload, thêm thông tin file vào formData
-  if (fileInput) {
-    Array.from(fileInput).forEach((file) => {
-      formData.append("file_id[]", file.file_id);
-      formData.append("file_name[]", file.file_name);
-    });
-  }
+  // // Nếu có file đã upload, thêm thông tin file vào formData
+  // if (fileInput) {
+  //   Array.from(fileInput).forEach((file) => {
+  //     formData.append("file_id[]", file.file_id);
+  //     formData.append("file_name[]", file.file_name);
+  //   });
+  // }
 
   // Hiển thị tin nhắn của người dùng
   if (userInput) {
     addMessageToChat("user", userInput.value, null);
   }
+  const text = userInput.value;
+  document.getElementById("userInput").value = "";
 
   isWaitingForBot = true;
   addWaitingBubble();
@@ -373,14 +380,14 @@ function sendMessage(message = null) {
     removeWaitingBubble();
     addMessageToChat(
       "bot",
-      "Kiên nhẫn là lòng can đảm của người chiến thắng, là sức mạnh của con người chống lại số phận. (Edward Bulwer Lytton)"
+      "Chờ chút nhé, tôi đang tổng hợp lại câu trả lời cho bạn đây."
     );
     addWaitingBubble();
   }, 4000);
 
   fetch(
     `/api/message?text=${encodeURIComponent(
-      userInput.value
+      text.trim()
     )}&user_id=${encodeURIComponent(user_id)}&session_id=${encodeURIComponent(
       session_id
     )}&conversation_id=${encodeURIComponent(
@@ -389,6 +396,7 @@ function sendMessage(message = null) {
   )
     .then((response) => response.json())
     .then((data) => {
+      document.getElementById("userInput").value = "";
       clearTimeout(delayMessageTimeout);
       console.log("Message sent:", data);
       removeWaitingBubble();
@@ -692,40 +700,88 @@ function updateFileList() {
 
   selectedFiles.forEach((fileName, index) => {
     const listItem = document.createElement("li");
+    listItem.className = "border-none shadow-lg rounded-lg p-2 h-14";
+    if (fileName.endsWith(".docx")) {
+      // Tạo phần tử hiển thị tên tệp với giới hạn chiều dài
+      const fileNameSpan = document.createElement("span");
+      fileNameSpan.innerHTML = `
+        <div title=${fileName} class="flex items-center justify-center space-x-1">
+          <img src="static/images/docx.png" class="w-8 h-8"/>
+          <h1 class="truncate max-w-[140px]">${fileName}</h1>
+        </div>
+      `
+      // Tạo nút xóa, bấm x để xoá
+      const deleteButton = document.createElement("button");
+      deleteButton.id = file_id[index];
+      deleteButton.textContent = "X";
+      deleteButton.className = "delete-button";
+      deleteButton.onclick = () => {
+        //Lấy segment_id từ session storage, lấy id từ file, đẩy vào api update_upload_file
+        const formDataUpLoadFile = new FormData();
+        formDataUpLoadFile.append(
+          "segment_id",
+          sessionStorage.getItem("start_segment_id")
+        );
+        formDataUpLoadFile.append("updated_file_id", file_id[index]);
 
-    // Tạo phần tử hiển thị tên tệp với giới hạn chiều dài
-    const fileNameSpan = document.createElement("span");
-    fileNameSpan.className = "file-name";
-    fileNameSpan.textContent =
-      fileName.length > 20 ? fileName.slice(0, 20) + "..." : fileName; // Giới hạn 20 ký tự
+        //đẩy vào api update_upload_file kèm với post file
+        fetch("/api/update_upload_file", {
+          method: "POST",
+          credentials: "include",
+          body: formDataUpLoadFile,
+        });
+        removeFile(index);
+      };
+      listItem.appendChild(fileNameSpan);
+      listItem.appendChild(deleteButton);
+      fileList.appendChild(listItem);
+    } else if (fileName.endsWith(".csv")) {
+      // Tạo phần tử hiển thị tên tệp với giới hạn chiều dài
+      const fileNameSpan = document.createElement("span");
+      fileNameSpan.innerHTML = `
+        <div title=${fileName} class="flex items-center justify-center space-x-1">
+          <img src="static/images/csv-svgrepo-com.svg" class="w-8 h-8"/>
+          <h1 class="truncate max-w-[140px]">${fileName}</h1>
+        </div>
+      `
+      // Tạo nút xóa, bấm x để xoá
+      const deleteButton = document.createElement("button");
+      deleteButton.id = file_id[index];
+      deleteButton.textContent = "X";
+      deleteButton.className = "delete-button";
+      deleteButton.onclick = async () => {
+        //Lấy segment_id từ session storage, lấy id từ file, đẩy vào api update_upload_file
+        const formDataUpLoadFile = new FormData();
+        formDataUpLoadFile.append(
+          "segment_id",
+          sessionStorage.getItem("start_segment_id")
+        );
+        formDataUpLoadFile.append("updated_file_id", file_id[index]);
 
-    // Tạo nút xóa, bấm x để xoá
-    const deleteButton = document.createElement("button");
-    deleteButton.id = file_id[index];
-    deleteButton.textContent = "X";
-    deleteButton.className = "delete-button";
-    deleteButton.onclick = () => {
-      //Lấy segment_id từ session storage, lấy id từ file, đẩy vào api update_upload_file
-      const formDataUpLoadFile = new FormData();
-      formDataUpLoadFile.append(
-        "segment_id",
-        sessionStorage.getItem("start_segment_id")
-      );
-      formDataUpLoadFile.append("updated_file_id", file_id[index]);
-      console.log(file_id[index]);
+        //đẩy vào api update_upload_file kèm với post file
+        await fetch("/api/update_upload_file", {
+          method: "POST",
+          credentials: "include",
+          body: formDataUpLoadFile,
+        }).then(async (response) => {
+          console.log(response.ok);
 
-      //đẩy vào api update_upload_file kèm với post file
-      fetch("/api/update_upload_file", {
-        method: "POST",
-        credentials: "include",
-        body: formDataUpLoadFile,
-      });
-      removeFile(index);
-    };
-
-    listItem.appendChild(fileNameSpan);
-    listItem.appendChild(deleteButton);
-    fileList.appendChild(listItem);
+          if (response.ok) {
+            console.log("File uploaded successfully.");
+            await fetch(`/api/remove_file/${file_id[index]}`, {
+              method: "DELETE",
+              credentials: "include",
+            });
+            removeFile(index);
+          } else {
+            console.error("Error uploading file:", response.statusText);
+          }
+        });
+      };
+      listItem.appendChild(fileNameSpan);
+      listItem.appendChild(deleteButton);
+      fileList.appendChild(listItem);
+    }
   });
 }
 

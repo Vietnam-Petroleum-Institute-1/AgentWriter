@@ -47,6 +47,18 @@ def insert_user(conn, user_id, name):
     logging.debug(f"User {user_id} inserted successfully.")
 
 
+def get_file_by_conversation(conn, conversation_id):
+    cur = conn.cursor()
+    get_file_query = """
+    SELECT file_id, file_name FROM upload_files WHERE conversation_id = %s
+    """
+    cur.execute(get_file_query, (conversation_id,))
+    list = cur.fetchall()
+    cur.close()
+
+    return list
+
+
 def session(conn, user_id, session_id, start_time, end_time):
     if not user_exists(conn, user_id):
         print(f"User {user_id} does not exist.")

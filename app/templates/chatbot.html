@@ -12,16 +12,15 @@
 
 <body>
 
-  <div class="file-container">
-    <h3 class="mb-3">Selected Files</h3>
+  <div class="file-container p-2 w-[250px]">
+    <h3 class="mb-3 font-bold">Selected Files</h3>
     <ul id="fileList" class="file-list pt-5"></ul>
   </div>
 
   <div class="chat-container" id="chatContainer">
-    <div class="chat-header">
-      <div class=" rounded-full w-20 h-20 flex items-center justify-center bg-white">
-        <img class=" rounded-full" src="{{ url_for('static', filename='images/Logo_Petrovietnam.svg.png') }}"
-          alt="Logo">
+    <div class="chat-header font-bold">
+      <div class=" rounded-full w-14 h-14 mr-2 flex items-center justify-center bg-white">
+        <img class=" w-10 h-10" src="{{ url_for('static', filename='images/Logo_Petrovietnam.svg.png') }}" alt="Logo">
       </div>
       PVPower Assistant
     </div>
@@ -52,10 +51,23 @@
           <span class="sr-only">Loading...</span>
         </div>
       </div>
-      <input type="text" id="userInput" class="userInput" placeholder="Xin mời bạn hỏi..."
-        onkeypress="handleKeyPress(event)" />
-      <button id="sendButton" onclick="sendMessage()">Send</button>
+      <textarea rows="1" id="userInput" onkeypress="handleKeyPress(event)"
+        class="userInput block mx-4 p-2.5 w-full text-md text-gray-900 bg-white rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+        style="max-height: 100px; min-height: 50px;" placeholder="Your message..."></textarea>
+      <button type="submit" id="sendButton" onclick="sendMessage()"
+        class=" w-12 h-12 inline-flex justify-center items-center p-2 text-blue-600 rounded-full cursor-pointer hover:bg-blue-500">
+        <svg class="w-5 h-5 rotate-90 rtl:-rotate-90" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+          fill="currentColor" viewBox="0 0 18 20">
+          <path
+            d="m17.914 18.594-8-18a1 1 0 0 0-1.828 0l-8 18a1 1 0 0 0 1.157 1.376L8 18.281V9a1 1 0 0 1 2 0v9.281l6.758 1.689a1 1 0 0 0 1.156-1.376Z" />
+        </svg>
+        <span class="sr-only">Send message</span>
+      </button>
     </div>
+    <!-- <input type="text" id="userInput" class="userInput" placeholder="Xin mời bạn hỏi..."
+      onkeypress="handleKeyPress(event)" />
+    <button id="sendButton" onclick="sendMessage()">Send</button> -->
+  </div>
   </div>
   </div>
   <div id="feedbackModal" class="modal">
