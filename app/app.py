@@ -175,6 +175,7 @@ def signin():
 
         if success:
             conn = connect_db()
+            insert_user(conn, username, username)
             session_id = session_continue(conn, username)
             if not session_id:
                 session_id = f"{uuid.uuid4()}"
