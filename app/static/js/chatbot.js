@@ -380,7 +380,7 @@ function sendMessage(message = null) {
     removeWaitingBubble();
     addMessageToChat(
       "bot",
-      "Chờ chút nhé, tôi đang tổng hợp lại câu trả lời cho bạn đây."
+      "Kiên nhẫn là lòng can đảm của người chiến thắng, là sức mạnh của con người chống lại số phận. (Edward Bulwer Lytton)"
     );
     addWaitingBubble();
   }, 4000);
