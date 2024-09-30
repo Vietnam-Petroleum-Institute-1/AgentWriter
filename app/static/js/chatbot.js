@@ -378,9 +378,18 @@ function sendMessage(message = null) {
 
   const delayMessageTimeout = setTimeout(() => {
     removeWaitingBubble();
+    const messages = [
+      "Kiên nhẫn là lòng can đảm của người chiến thắng, là sức mạnh của con người chống lại số phận. (Edward Bulwer Lytton)",
+      "Đến sớm 5 phút mới là đúng giờ; đến đúng giờ là đến muộn; còn đến muộn thì không thể chấp nhận được!",
+      "Suy nghĩ của bạn ở đâu, tương lai của bạn ở đó",
+      "Để có thể thành công, bạn buộc phải tin rằng bạn có thể"
+    ];
+    
+    // Chọn ngẫu nhiên một câu từ mảng
+    const randomMessage = messages[Math.floor(Math.random() * messages.length)];
     addMessageToChat(
       "bot",
-      "Kiên nhẫn là lòng can đảm của người chiến thắng, là sức mạnh của con người chống lại số phận. (Edward Bulwer Lytton)"
+      randomMessage
     );
     addWaitingBubble();
   }, 4000);
