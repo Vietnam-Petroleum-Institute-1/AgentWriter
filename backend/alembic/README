@@ -1,0 +1,16 @@
+1. Chạy migration để tạo bảng trong database:
+```
+alembic init
+alembic revision --autogenerate -m "create initial tables"
+alembic upgrade head
+```
+
+2. Nếu có lỗi:
+```
+# Rollback migration
+alembic downgrade -1
+
+# Sửa models và chạy lại
+alembic revision --autogenerate -m "create initial tables"
+alembic upgrade head
+```

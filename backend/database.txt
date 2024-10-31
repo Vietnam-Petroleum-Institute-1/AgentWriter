@@ -1,0 +1,88 @@
+Tôi cần tạo model sqlalchemy cho các bảng sau trên postgres(một số lưu ý:
+- created_at và updated_at tự động tạo khi insert và update, lấy giờ +00:00 làm gôc (giờ London), một số bảng chỉ có created_at hoặc updated_at hoặc không có
+- id của các bảng có định dạng <table_name>-<uuid>
+- có delete và update cascade
+- nhớ đặt tên các ràng buộc khóa ngoại (vd: fk_chunk_file_id)
+):
+
+bot {
+    bot_id: varchar(100) primary key not null
+    name: varchar(100) not null
+    type: varchar(100) not null
+    created_at: timestamp
+    updated_at: timestamp
+}
+
+chunk {
+    chunk_id: varchar(100) primary key not null
+    content: text not null
+    file_id: varchar(100) not null references file(file_id)
+    created_at: timestamp
+}
+
+file {
+    file_id: varchar(100) primary key not null
+    notebook_id: varchar(100) not null references notebook(notebook_id)
+    file_name: varchar(255) not null
+    extension: enum('pdf', 'docx', 'txt') not null
+    summary: text
+    content: text
+    file_path: varchar(255) not null
+    created_at: timestamp
+}
+
+message_feedback {
+    feedback_id: varchar(100) primary key not null
+    user_id: varchar(100) not null references user(user_id)
+    message_id: varchar(100) not null references message_log(message_id)
+    notebook_id: varchar(100) not null references notebook(notebook_id)
+    content: text not null
+    seen: boolean not null default false
+    created_at: timestamp
+}
+
+message_log {
+    message_id: varchar(100) primary key not null
+    notebook_id: varchar(100) not null references notebook(notebook_id)
+    bot_id: varchar(100) not null references bot(bot_id)
+    content: text not null
+    from_user: boolean not null
+    created_at: timestamp
+}
+
+note {
+    note_id: varchar(100) primary key not null
+    notebook_id: varchar(100) not null references notebook(notebook_id)
+    chunk_id: varchar(100) not null references chunk(chunk_id)
+    title: varchar(255) not null
+    content: text
+    created_at: timestamp
+    updated_at: timestamp
+}
+
+notebook {
+    notebook_id: varchar(100) primary key not null
+    user_id: varchar(100) not null references user(user_id)
+    title: varchar(255) not null
+    created_at: timestamp
+    updated_at: timestamp
+}
+
+system_feedback {
+    feedback_id: varchar(100) primary key not null
+    user_id: varchar(100) not null references user(user_id)
+    content: text not null
+    seen: boolean not null default false
+    created_at: timestamp
+}
+
+user {
+    user_id: varchar(100) primary key not null
+    username: varchar(100) unique not null
+    full_name: varchar(255)
+    email: varchar(255) unique not null
+    password: varchar(255) not null
+    role: enum('admin', 'user') not null default 'user'
+    created_at: timestamp
+    updated_at: timestamp
+}
