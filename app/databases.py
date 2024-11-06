@@ -8,15 +8,22 @@ import logging
 load_dotenv()
 
 HOST = os.getenv("DB_HOST")
+print(HOST)
 
 
 def connect_db():
     return psycopg2.connect(
         dbname="agent_writer",
-        user="phuongpd",
-        password="vdkvn22.05",
+        user="postgres",
+        password="Namdeptrai01",
         host=HOST,
-        port="5432",
+        port="5433",
+
+        # dbname="agent_writer",
+        # user="phuongpd",
+        # password="vdkvn22.05",
+        # host=HOST,
+        # port="5432",
     )
 
 
