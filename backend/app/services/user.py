@@ -1,9 +1,10 @@
 from typing import List, Optional
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -13,7 +14,7 @@ class UserService:
         self.db = db
 
     async def get_user(self, user_id: str) -> Optional[User]:
-        result = await self.db.execute(select(User).where(User.user_id == user_id))
+        result = await self.db.execute(select(User).filter(User.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def get_users(self, skip: int = 0, limit: int = 100) -> List[User]:
@@ -53,4 +54,23 @@ class UserService:
 
         await self.db.delete(user)
         await self.db.commit()
+        return user
+
+    async def change_password(
+        self, user_id: str, current_password: str, new_password: str
+    ) -> Optional[User]:
+        user = await self.get_user(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
+        if not verify_password(current_password, user.password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect password"
+            )
+
+        user.password = get_password_hash(new_password)
+        await self.db.commit()
+        await self.db.refresh(user)
         return user

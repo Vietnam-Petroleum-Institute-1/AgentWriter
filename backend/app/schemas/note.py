@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -6,21 +7,22 @@ from pydantic import BaseModel
 class NoteBase(BaseModel):
     title: str
     content: Optional[str] = None
-    notebook_id: str
-    chunk_id: str
 
 
 class NoteCreate(NoteBase):
-    pass
+    notebook_id: str
 
 
-class NoteUpdate(NoteBase):
-    pass
+class NoteUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
 
 
 class NoteResponse(NoteBase):
     note_id: str
-    user_id: str
+    notebook_id: str
+    created_at: datetime
+    updated_at: Optional[datetime]
 
     class Config:
-        orm_mode = True
+        from_attributes = True

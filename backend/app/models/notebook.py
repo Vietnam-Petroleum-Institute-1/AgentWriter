@@ -10,9 +10,8 @@ class Notebook(BaseModel):
     )
     user_id = Column(
         String(100),
-        ForeignKey("user.user_id", ondelete="CASCADE"),
+        ForeignKey("user.user_id", ondelete="CASCADE", name="fk_notebook_user_id"),
         nullable=False,
-        name="fk_notebook_user_id",
     )
     title = Column(String(255), nullable=False)
 

@@ -11,9 +11,8 @@ class Chunk(BaseModel):
     content = Column(Text, nullable=False)
     file_id = Column(
         String(100),
-        ForeignKey("file.file_id", ondelete="CASCADE"),
+        ForeignKey("file.file_id", ondelete="CASCADE", name="fk_chunk_file_id"),
         nullable=False,
-        name="fk_chunk_file_id",
     )
 
     file = relationship("File", backref="chunks")

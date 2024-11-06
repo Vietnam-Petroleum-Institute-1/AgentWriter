@@ -12,15 +12,15 @@ class MessageLog(BaseModel):
     )
     notebook_id = Column(
         String(100),
-        ForeignKey("notebook.notebook_id", ondelete="CASCADE"),
+        ForeignKey(
+            "notebook.notebook_id", ondelete="CASCADE", name="fk_message_notebook_id"
+        ),
         nullable=False,
-        name="fk_message_notebook_id",
     )
     bot_id = Column(
         String(100),
-        ForeignKey("bot.bot_id", ondelete="CASCADE"),
+        ForeignKey("bot.bot_id", ondelete="CASCADE", name="fk_message_bot_id"),
         nullable=False,
-        name="fk_message_bot_id",
     )
     content = Column(Text, nullable=False)
     from_user = Column(Boolean, nullable=False)

@@ -10,9 +10,10 @@ class File(BaseModel):
     )
     notebook_id = Column(
         String(100),
-        ForeignKey("notebook.notebook_id", ondelete="CASCADE"),
+        ForeignKey(
+            "notebook.notebook_id", ondelete="CASCADE", name="fk_file_notebook_id"
+        ),
         nullable=False,
-        name="fk_file_notebook_id",
     )
     file_name = Column(String(255), nullable=False)
     extension = Column(
