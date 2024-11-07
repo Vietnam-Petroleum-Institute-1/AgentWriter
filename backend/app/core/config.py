@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["*"]
 
     # Database configs
-    POSTGRES_URL: str
+    POSTGRES_URI: str
     POSTGRES_SSL_MODE: str = "require"
 
     # JWT configs

@@ -3,13 +3,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import (
+    admin_router,
     auth_router,
     message_feedback_router,
     note_router,
     notebook_router,
     system_feedback_router,
     users_router,
-    admin_router,
 )
 from app.core.config import settings
 from app.core.exception_handler import (
@@ -45,7 +45,7 @@ api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(notebook_router)
 api_router.include_router(note_router)
-api_router.include_router(message_feedback_router)
+# api_router.include_router(message_feedback_router)
 api_router.include_router(system_feedback_router)
 api_router.include_router(admin_router)
 app.include_router(api_router)
