@@ -1,6 +1,5 @@
 from app.models.base import BaseModel
 from app.models.bot import Bot
-from app.models.chunk import Chunk
 from app.models.file import File
 from app.models.message_feedback import MessageFeedback
 from app.models.message_log import MessageLog
@@ -17,7 +16,6 @@ __all__ = [
     "SystemFeedback",
     "File",
     "MessageLog",
-    "Chunk",
     "Note",
     "MessageFeedback",
 ]

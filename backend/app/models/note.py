@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, String, Text
+from sqlalchemy import ARRAY, Column, ForeignKey, String, Text
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -10,18 +10,12 @@ class Note(BaseModel):
     )
     notebook_id = Column(
         String(100),
-        ForeignKey("notebook.notebook_id", ondelete="CASCADE"),
+        ForeignKey(
+            "notebook.notebook_id", ondelete="CASCADE", name="fk_note_notebook_id"
+        ),
         nullable=False,
-        name="fk_note_notebook_id",
-    )
-    chunk_id = Column(
-        String(100),
-        ForeignKey("chunk.chunk_id", ondelete="CASCADE"),
-        nullable=False,
-        name="fk_note_chunk_id",
     )
     title = Column(String(255), nullable=False)
     content = Column(Text)
 
     notebook = relationship("Notebook", backref="notes")
-    chunk = relationship("Chunk", backref="notes")

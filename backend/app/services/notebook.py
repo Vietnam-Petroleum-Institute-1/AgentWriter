@@ -26,9 +26,20 @@ class NotebookService:
 
     async def get_notebook(self, notebook_id: str) -> Optional[Notebook]:
         result = await self.db.execute(
-            select(Notebook).where(Notebook.notebook_id == notebook_id)
+            select(Notebook).filter(Notebook.notebook_id == notebook_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_user_notebooks(
+        self, user_id: str, skip: int = 0, limit: int = 100
+    ) -> List[Notebook]:
+        result = await self.db.execute(
+            select(Notebook)
+            .filter(Notebook.user_id == user_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
 
     async def update_notebook(
         self, notebook_id: str, notebook_in: NotebookUpdate

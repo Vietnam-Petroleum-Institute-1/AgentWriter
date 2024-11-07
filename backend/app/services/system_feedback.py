@@ -14,7 +14,7 @@ class SystemFeedbackService:
     async def create_system_feedback(
         self, feedback_in: SystemFeedbackCreate, user_id: str
     ) -> SystemFeedback:
-        feedback = SystemFeedback(**feedback_in.dict(), user_id=user_id)
+        feedback = SystemFeedback(**feedback_in.model_dump(), user_id=user_id)
         self.db.add(feedback)
         await self.db.commit()
         await self.db.refresh(feedback)

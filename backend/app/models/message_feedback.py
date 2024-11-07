@@ -12,21 +12,22 @@ class MessageFeedback(BaseModel):
     )
     user_id = Column(
         String(100),
-        ForeignKey("user.user_id", ondelete="CASCADE"),
+        ForeignKey("user.user_id", ondelete="CASCADE", name="fk_feedback_user_id"),
         nullable=False,
-        name="fk_feedback_user_id",
     )
     message_id = Column(
         String(100),
-        ForeignKey("message_log.message_id", ondelete="CASCADE"),
+        ForeignKey(
+            "message_log.message_id", ondelete="CASCADE", name="fk_feedback_message_id"
+        ),
         nullable=False,
-        name="fk_feedback_message_id",
     )
     notebook_id = Column(
         String(100),
-        ForeignKey("notebook.notebook_id", ondelete="CASCADE"),
+        ForeignKey(
+            "notebook.notebook_id", ondelete="CASCADE", name="fk_feedback_notebook_id"
+        ),
         nullable=False,
-        name="fk_feedback_notebook_id",
     )
     content = Column(Text, nullable=False)
     seen = Column(Boolean, nullable=False, default=False)

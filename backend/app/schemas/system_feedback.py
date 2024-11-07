@@ -4,9 +4,7 @@ from pydantic import BaseModel
 
 
 class SystemFeedbackBase(BaseModel):
-    user_id: str
     content: str
-    seen: bool = False
 
 
 class SystemFeedbackCreate(SystemFeedbackBase):
@@ -18,7 +16,9 @@ class SystemFeedbackUpdate(SystemFeedbackBase):
 
 
 class SystemFeedbackResponse(SystemFeedbackBase):
+    user_id: str
     feedback_id: str
+    seen: bool
 
     class Config:
         orm_mode = True
