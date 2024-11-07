@@ -12,6 +12,9 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_URI=postgresql://postgres:postgres@db:5432/agent_notebook
   # service for postgres
   db:
     image: postgres:13
@@ -21,7 +24,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: agent_notebook
     volumes:
-      - ./ini_backup.sql:/docker-entrypoint-initdb.d/ini_backup.sql
+      # - ./postgres/ini_backup.sql:/docker-entrypoint-initdb.d/ini_backup.sql
       - postgres_data:/var/lib/postgresql/data # Ensure defined volume
     ports:
       - "5432:5432"
