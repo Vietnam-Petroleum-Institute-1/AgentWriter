@@ -5,6 +5,7 @@ from app.api.v1.note_router import router as note_router
 from app.api.v1.notebook_router import router as notebook_router
 from app.api.v1.system_feedback_router import router as system_feedback_router
 from app.api.v1.user_router import router as users_router
+from app.api.v1.chat_router import router as chat_router
 
 __all__ = [
     "users_router",
@@ -14,4 +15,5 @@ __all__ = [
     "message_feedback_router",
     "system_feedback_router",
     "admin_router",
+    "chat_router",
 ]

@@ -10,6 +10,7 @@ from app.api.v1 import (
     notebook_router,
     system_feedback_router,
     users_router,
+    chat_router
 )
 from app.core.config import settings
 from app.core.exception_handler import (
@@ -48,4 +49,5 @@ api_router.include_router(note_router)
 # api_router.include_router(message_feedback_router)
 api_router.include_router(system_feedback_router)
 api_router.include_router(admin_router)
+api_router.include_router(chat_router)
 app.include_router(api_router)

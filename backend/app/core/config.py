@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Dify configs
     DIFY_API_KEY: str
     DIFY_API_URL: str
+    CHATBOT_URL:str
 
     # App configs
     SECRET_KEY: str
