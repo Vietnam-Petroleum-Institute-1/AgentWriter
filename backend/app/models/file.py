@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Enum, ForeignKey, String, Text
+from sqlalchemy import Column, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -15,6 +15,14 @@ class File(BaseModel):
         ),
         nullable=False,
     )
+    user_id = Column(
+        String(100),
+        ForeignKey("user.user_id", ondelete="CASCADE", name="fk_file_user_id"),
+        nullable=False,
+    )
+    session_id = Column(String(100), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    updated_by = Column(String(100), nullable=True)
     file_name = Column(String(255), nullable=False)
     extension = Column(
         Enum("pdf", "docx", "txt", name="file_extension_enum"), nullable=False
