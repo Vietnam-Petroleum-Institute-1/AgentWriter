@@ -29,9 +29,11 @@ CHATBOT_URL = settings.CHATBOT_URL
 DIFY_API_KEY = settings.DIFY_API_KEY
 
 @router.post("/upload_file")
-async def upload_file(request: Request, db: AsyncSession = Depends(get_db),user_id: str = Depends(verify_token)):
+async def upload_file(request: Request, db: AsyncSession = Depends(get_db)
+    ,user_id: str = Depends(verify_token)
+    ):
     form_data = await request.form()
-    user_id = form_data.get("user_id")
+    # user_id = form_data.get("user_id")
     session_id = form_data.get("session_id")
     conversation_id = form_data.get("conversation_id")
     mime_type = form_data.get("mime_type")
