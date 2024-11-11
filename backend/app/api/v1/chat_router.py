@@ -7,6 +7,7 @@ from app.schemas.file import FileData
 
 from app.core.database import get_db
 from app.core.dependencies import verify_token
+from fastapi.responses import StreamingResponse
 
 import os
 import re
@@ -33,9 +34,7 @@ async def upload_file(request: Request, db: AsyncSession = Depends(get_db),user_
     user_id = form_data.get("user_id")
     session_id = form_data.get("session_id")
     conversation_id = form_data.get("conversation_id")
-    file_size = form_data.get("file_size")
     mime_type = form_data.get("mime_type")
-    created_by = request.cookies.get("user_id")
     file = form_data.get("file")
 
     # Create upload service
@@ -71,7 +70,7 @@ async def upload_file(request: Request, db: AsyncSession = Depends(get_db),user_
         conversation_id=conversation_id,
         file_name=file.filename,
         file_path=file_path,
-        file_size=file_size,
+        file_size=file.size,
         mime_type=mime_type,
         created_by=user_id
     )
@@ -137,28 +136,23 @@ async def call_chat_messages_api_and_process_stream(
         "user": user_id,
     }
     logger.debug(f"Body: {body}")
-    try:
-        url = f"{CHATBOT_URL}/chat-messages"
+    url = f"{CHATBOT_URL}/chat-messages"
+
+    async def stream_response():
+        buffer = ""
+        final_result = ""
+        conversation_id = None
+        message_id = None
+
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=body)
-            final_result = ""
-            buffer = ""
-            conversation_id = None
-            message_id = None
 
             async for chunk in response.aiter_lines():
-                # Bỏ qua các chunk rỗng
                 if not chunk:
                     continue
 
-                # Giải mã chunk từ bytes thành string
-                chunk_str = chunk
-                buffer += chunk_str
-
-                # Sử dụng regex để tách từng JSON object
+                buffer += chunk
                 json_blocks = re.split(r"(?<=\})\s*(?=data: {)", buffer)
-
-                # Gán phần còn lại của buffer chưa hoàn chỉnh
                 buffer = json_blocks.pop() if json_blocks else ""
 
                 for json_block in json_blocks:
@@ -167,21 +161,18 @@ async def call_chat_messages_api_and_process_stream(
                         json_string = json_block.replace("data: ", "")
                         try:
                             json_data = json.loads(json_string)
-                            logger.debug(f"json_data: {json_data}")
-
-                            # Kiểm tra tín hiệu kết thúc stream
-                            if json_data.get("event") in [
-                                "tts_message_end",
-                                "message_end",
-                            ]:
-                                return (
-                                    final_result,
-                                    conversation_id,
-                                    message_id,
-                                )  # Kết thúc stream
+                            if json_data.get("event") in ["tts_message_end", "message_end"]:
+                                yield json.dumps({
+                                    "final_result": final_result,
+                                    "conversation_id": conversation_id,
+                                    "message_id": message_id,
+                                }) + "\n"
+                                return
 
                             if "answer" in json_data:
                                 final_result += json_data["answer"]
+                                # Gửi từng phần của câu trả lời theo từng chunk
+                                yield json.dumps({"answer": json_data["answer"]}) + "\n"
                             if "conversation_id" in json_data:
                                 conversation_id = json_data["conversation_id"]
                             if "message_id" in json_data:
@@ -189,27 +180,14 @@ async def call_chat_messages_api_and_process_stream(
                         except json.JSONDecodeError as e:
                             logger.error(f"Error parsing JSON: {e}")
 
-            # Xử lý phần còn lại trong buffer khi kết thúc stream
+            # Xử lý phần còn lại của buffer khi kết thúc stream
             if buffer.startswith("data:"):
                 json_string = buffer.replace("data: ", "")
                 try:
                     json_data = json.loads(json_string)
-                    logger.debug(f"json_data (remaining buffer): {json_data}")
                     if "answer" in json_data:
-                        final_result += json_data["answer"]
-                    if "conversation_id" in json_data:
-                        conversation_id = json_data["conversation_id"]
-                    if "message_id" in json_data:
-                        message_id = json_data["message_id"]
+                        yield json.dumps({"answer": json_data["answer"]}) + "\n"
                 except json.JSONDecodeError as e:
                     logger.error(f"Error parsing JSON (remaining buffer): {e}")
 
-            return {
-                "final_result": final_result,
-                "conversation_id": conversation_id,
-                "message_id": message_id,
-            }
-
-    except httpx.RequestError as e:
-        logger.error(f"Error calling the API: {e}")
-        raise HTTPException(status_code=500, detail="Error calling the external API")
+    return StreamingResponse(stream_response(), media_type="application/json")
