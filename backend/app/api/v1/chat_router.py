@@ -138,10 +138,11 @@ async def call_chat_messages_api_and_process_stream(
     logger.debug(f"Body: {body}")
     url = f"{CHATBOT_URL}/chat-messages"
 
+    
     async def stream_response():
         buffer = ""
         final_result = ""
-        conversation_id = None
+        current_conversation_id = conversation_id
         message_id = None
 
         async with httpx.AsyncClient() as client:
@@ -162,19 +163,24 @@ async def call_chat_messages_api_and_process_stream(
                         try:
                             json_data = json.loads(json_string)
                             if json_data.get("event") in ["tts_message_end", "message_end"]:
+                                # Trả về kết quả cuối cùng khi kết thúc stream
                                 yield json.dumps({
                                     "final_result": final_result,
-                                    "conversation_id": conversation_id,
+                                    "conversation_id": current_conversation_id,
                                     "message_id": message_id,
                                 }) + "\n"
                                 return
 
                             if "answer" in json_data:
                                 final_result += json_data["answer"]
-                                # Gửi từng phần của câu trả lời theo từng chunk
-                                yield json.dumps({"answer": json_data["answer"]}) + "\n"
+                                # Trả về chunk kèm conversation_id và message_id
+                                yield json.dumps({
+                                    "answer": json_data["answer"],
+                                    "conversation_id": current_conversation_id,
+                                    "message_id": message_id,
+                                }) + "\n"
                             if "conversation_id" in json_data:
-                                conversation_id = json_data["conversation_id"]
+                                current_conversation_id = json_data["conversation_id"]
                             if "message_id" in json_data:
                                 message_id = json_data["message_id"]
                         except json.JSONDecodeError as e:
@@ -186,7 +192,11 @@ async def call_chat_messages_api_and_process_stream(
                 try:
                     json_data = json.loads(json_string)
                     if "answer" in json_data:
-                        yield json.dumps({"answer": json_data["answer"]}) + "\n"
+                        yield json.dumps({
+                            "answer": json_data["answer"],
+                            "conversation_id": current_conversation_id,
+                            "message_id": message_id,
+                        }) + "\n"
                 except json.JSONDecodeError as e:
                     logger.error(f"Error parsing JSON (remaining buffer): {e}")
 
