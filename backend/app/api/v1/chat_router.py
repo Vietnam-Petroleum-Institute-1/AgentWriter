@@ -1,7 +1,14 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 
 from app.core.config import settings
+from app.services.upload_file import UploadFileService
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.schemas.file import FileData
 
+from app.core.database import get_db
+from app.core.dependencies import verify_token
+
+import os
 import re
 import random
 import httpx
@@ -10,11 +17,68 @@ import json
 
 router = APIRouter(prefix="/chat", tags=["Dify chatbot"])
 
+# Thiết lập thư mục lưu trữ file upload
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # Logger setup for debugging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 CHATBOT_URL = settings.CHATBOT_URL
 DIFY_API_KEY = settings.DIFY_API_KEY
+
+@router.post("/upload_file")
+async def upload_file(request: Request, db: AsyncSession = Depends(get_db),user_id: str = Depends(verify_token)):
+    form_data = await request.form()
+    user_id = form_data.get("user_id")
+    session_id = form_data.get("session_id")
+    conversation_id = form_data.get("conversation_id")
+    file_size = form_data.get("file_size")
+    mime_type = form_data.get("mime_type")
+    created_by = request.cookies.get("user_id")
+    file = form_data.get("file")
+
+    # Create upload service
+    upload_file_service = UploadFileService(CHATBOT_URL=CHATBOT_URL,db=db)
+
+    if not file:
+        raise HTTPException(status_code=400, detail="File not found in request")
+
+    # Lưu file tạm thời để xử lý
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    # Trích xuất nội dung file dựa trên MIME type
+    content = ""
+    if mime_type == "csv":
+        content = upload_file_service.extract_csv_content(file_path)
+    elif mime_type == "docx":
+        content = upload_file_service.extract_docx_content(file_path)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported MIME type")
+
+    # Gọi API upload
+    file_id, error = await upload_file_service.call_upload_api(mime_type, content)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    
+    # insert_file
+    file_data = FileData(
+        file_id=file_id,  # Generate unique file ID here (e.g., using UUID)
+        user_id=user_id,
+        session_id=session_id,
+        conversation_id=conversation_id,
+        file_name=file.filename,
+        file_path=file_path,
+        file_size=file_size,
+        mime_type=mime_type,
+        created_by=user_id
+    )
+    await upload_file_service.create_file(file_data)
+
+    # Trả về kết quả
+    return {"message": f"File {file.filename} uploaded successfully", "file_id": file_id}
 
 @router.post("/update_upload_file")
 async def update_file(request: Request):
