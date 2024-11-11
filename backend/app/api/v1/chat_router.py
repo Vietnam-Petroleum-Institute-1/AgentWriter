@@ -28,16 +28,22 @@ logging.basicConfig(level=logging.DEBUG)
 CHATBOT_URL = settings.CHATBOT_URL
 DIFY_API_KEY = settings.DIFY_API_KEY
 
+def get_file_type(filename):
+    # Split the filename into root and extension
+    _, file_extension = os.path.splitext(filename)
+    return file_extension[1:] if file_extension else None  # Remove the dot
+
+
 @router.post("/upload_file")
 async def upload_file(request: Request, db: AsyncSession = Depends(get_db)
-    ,user_id: str = Depends(verify_token)
+    # ,user_id: str = Depends(verify_token)
     ):
     form_data = await request.form()
-    # user_id = form_data.get("user_id")
+    user_id = form_data.get("user_id")
     session_id = form_data.get("session_id")
     conversation_id = form_data.get("conversation_id")
-    mime_type = form_data.get("mime_type")
     file = form_data.get("file")
+    mime_type = get_file_type(file.filename)
 
     # Create upload service
     upload_file_service = UploadFileService(CHATBOT_URL=CHATBOT_URL,db=db)
