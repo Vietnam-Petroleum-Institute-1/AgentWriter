@@ -144,24 +144,28 @@ async def call_chat_messages_api_and_process_stream(
         "user": user_id,
     }
     logger.debug(f"Body: {body}")
-    url = f"{CHATBOT_URL}/chat-messages"
-
-    
-    async def stream_response():
-        buffer = ""
-        final_result = ""
-        current_conversation_id = conversation_id
-        message_id = None
-
+    try:
+        url = f"{CHATBOT_URL}/chat-messages"
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=body)
+            final_result = ""
+            buffer = ""
+            conversation_id = None
+            message_id = None
 
             async for chunk in response.aiter_lines():
+                # Bỏ qua các chunk rỗng
                 if not chunk:
                     continue
 
-                buffer += chunk
+                # Giải mã chunk từ bytes thành string
+                chunk_str = chunk
+                buffer += chunk_str
+
+                # Sử dụng regex để tách từng JSON object
                 json_blocks = re.split(r"(?<=\})\s*(?=data: {)", buffer)
+
+                # Gán phần còn lại của buffer chưa hoàn chỉnh
                 buffer = json_blocks.pop() if json_blocks else ""
 
                 for json_block in json_blocks:
@@ -170,42 +174,49 @@ async def call_chat_messages_api_and_process_stream(
                         json_string = json_block.replace("data: ", "")
                         try:
                             json_data = json.loads(json_string)
-                            if json_data.get("event") in ["tts_message_end", "message_end"]:
-                                # Trả về kết quả cuối cùng khi kết thúc stream
-                                yield json.dumps({
-                                    "final_result": final_result,
-                                    "conversation_id": current_conversation_id,
-                                    "message_id": message_id,
-                                }) + "\n"
-                                return
+                            logger.debug(f"json_data: {json_data}")
+
+                            # Kiểm tra tín hiệu kết thúc stream
+                            if json_data.get("event") in [
+                                "tts_message_end",
+                                "message_end",
+                            ]:
+                                return (
+                                    final_result,
+                                    conversation_id,
+                                    message_id,
+                                )  # Kết thúc stream
 
                             if "answer" in json_data:
                                 final_result += json_data["answer"]
-                                # Trả về chunk kèm conversation_id và message_id
-                                yield json.dumps({
-                                    "answer": json_data["answer"],
-                                    "conversation_id": current_conversation_id,
-                                    "message_id": message_id,
-                                }) + "\n"
                             if "conversation_id" in json_data:
-                                current_conversation_id = json_data["conversation_id"]
+                                conversation_id = json_data["conversation_id"]
                             if "message_id" in json_data:
                                 message_id = json_data["message_id"]
                         except json.JSONDecodeError as e:
                             logger.error(f"Error parsing JSON: {e}")
 
-            # Xử lý phần còn lại của buffer khi kết thúc stream
+            # Xử lý phần còn lại trong buffer khi kết thúc stream
             if buffer.startswith("data:"):
                 json_string = buffer.replace("data: ", "")
                 try:
                     json_data = json.loads(json_string)
+                    logger.debug(f"json_data (remaining buffer): {json_data}")
                     if "answer" in json_data:
-                        yield json.dumps({
-                            "answer": json_data["answer"],
-                            "conversation_id": current_conversation_id,
-                            "message_id": message_id,
-                        }) + "\n"
+                        final_result += json_data["answer"]
+                    if "conversation_id" in json_data:
+                        conversation_id = json_data["conversation_id"]
+                    if "message_id" in json_data:
+                        message_id = json_data["message_id"]
                 except json.JSONDecodeError as e:
                     logger.error(f"Error parsing JSON (remaining buffer): {e}")
 
-    return StreamingResponse(stream_response(), media_type="application/json")
+            return {
+                "final_result": final_result,
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            }
+
+    except httpx.RequestError as e:
+        logger.error(f"Error calling the API: {e}")
+        raise HTTPException(status_code=500, detail="Error calling the external API")
