@@ -268,3 +268,10 @@ class ChatService:
         """Get file by id"""
         result = await self.db.execute(select(File).filter(File.file_id == file_id))
         return result.scalar_one_or_none()
+
+    async def get_files_in_notebook(self, notebook_id: str) -> List[File]:
+        """Get files in notebook"""
+        result = await self.db.execute(
+            select(File).filter(File.notebook_id == notebook_id)
+        )
+        return result.scalars().all()
