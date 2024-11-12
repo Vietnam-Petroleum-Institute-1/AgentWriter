@@ -14,5 +14,9 @@ class Notebook(BaseModel):
         nullable=False,
     )
     title = Column(String(255), nullable=False)
+    conversation_dify_id = Column(String(255), nullable=True)
 
     user = relationship("User", backref="notebooks")
+    files = relationship(
+        "File", back_populates="notebook", cascade="all, delete-orphan"
+    )

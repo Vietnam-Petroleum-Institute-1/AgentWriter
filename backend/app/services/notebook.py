@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from app.models.notebook import Notebook
 from app.schemas.notebook import NotebookCreate, NotebookUpdate
@@ -26,7 +27,9 @@ class NotebookService:
 
     async def get_notebook(self, notebook_id: str) -> Optional[Notebook]:
         result = await self.db.execute(
-            select(Notebook).filter(Notebook.notebook_id == notebook_id)
+            select(Notebook)
+            .options(selectinload(Notebook.files))
+            .filter(Notebook.notebook_id == notebook_id)
         )
         return result.scalar_one_or_none()
 
