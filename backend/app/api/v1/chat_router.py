@@ -1,222 +1,192 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
+import os
+from typing import List, Optional
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.param_functions import Body
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.services.upload_file import UploadFileService
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.file import FileData
-
 from app.core.database import get_db
 from app.core.dependencies import verify_token
-from fastapi.responses import StreamingResponse
-
-import os
-import re
-import random
-import httpx
-import logging
-import json
+from app.schemas.chat import (
+    ChatMessage,
+    ChatResponse,
+    FileUploadResponse,
+    MessageLogCreate,
+    MessageLogResponse,
+    UpdateSegmentRequest,
+    UpdateSegmentResponse,
+)
+from app.schemas.file import FileData
+from app.services.chat import ChatService
 
 router = APIRouter(prefix="/chat", tags=["Dify chatbot"])
 
-# Thiết lập thư mục lưu trữ file upload
+# Setup upload folder
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Logger setup for debugging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
-CHATBOT_URL = settings.CHATBOT_URL
-DIFY_API_KEY = settings.DIFY_API_KEY
 
-def get_file_type(filename):
-    # Split the filename into root and extension
+def get_file_type(filename: str) -> str:
     _, file_extension = os.path.splitext(filename)
-    return file_extension[1:] if file_extension else None  # Remove the dot
+    return file_extension[1:] if file_extension else None
 
 
-@router.post("/upload_file")
-async def upload_file(request: Request, db: AsyncSession = Depends(get_db)
-    ,user_id: str = Depends(verify_token)
-    ):
-    form_data = await request.form()
-    # user_id = form_data.get("user_id")
-    session_id = form_data.get("session_id")
-    conversation_id = form_data.get("conversation_id")
-    file = form_data.get("file")
-    mime_type = get_file_type(file.filename)
+@router.post("/upload_file", response_model=FileUploadResponse)
+async def upload_file(
+    file: UploadFile = File(...),
+    session_id: Optional[str] = Form(None),
+    conversation_id: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(verify_token),
+):
+    """
+    Upload a file for chat processing.
 
-    # Create upload service
-    upload_file_service = UploadFileService(CHATBOT_URL=CHATBOT_URL,db=db)
-
+    - **file**: The file to upload (supported types: csv, docx)
+    - **session_id**: Optional session ID
+    - **conversation_id**: Optional conversation ID
+    """
     if not file:
         raise HTTPException(status_code=400, detail="File not found in request")
 
-    # Lưu file tạm thời để xử lý
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+    mime_type = get_file_type(file.filename)
+    file_content = await file.read()
 
-    # Trích xuất nội dung file dựa trên MIME type
-    content = ""
-    if mime_type == "csv":
-        content = upload_file_service.extract_csv_content(file_path)
-    elif mime_type == "docx":
-        content = upload_file_service.extract_docx_content(file_path)
-    else:
-        raise HTTPException(status_code=400, detail="Unsupported MIME type")
+    chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
 
-    # Gọi API upload
-    file_id, error = await upload_file_service.call_upload_api(mime_type, content)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    
-    # insert_file
     file_data = FileData(
-        file_id=file_id,  # Generate unique file ID here (e.g., using UUID)
+        file_id="",  # Will be set after upload
         user_id=user_id,
         session_id=session_id,
         conversation_id=conversation_id,
         file_name=file.filename,
-        file_path=file_path,
+        file_path=os.path.join(UPLOAD_FOLDER, file.filename),
         file_size=file.size,
         mime_type=mime_type,
-        created_by=user_id
+        created_by=user_id,
     )
-    await upload_file_service.create_file(file_data)
 
-    # Trả về kết quả
-    return {"message": f"File {file.filename} uploaded successfully", "file_id": file_id}
+    file_id, error = await chat_service.process_file_upload(
+        file_data, file_content, mime_type
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
 
-@router.post("/update_upload_file")
-async def update_file(request: Request):
-    form_data = await request.form()
-    segment_id = form_data.get("segment_id")
-    content = form_data.get("updated_file_id")
-    
-    # Sử dụng regex để chia đoạn văn thành các từ (loại bỏ dấu câu)
-    words = re.findall(r"\b\w+\b", content)
+    return FileUploadResponse(
+        message=f"File {file.filename} uploaded successfully", file_id=file_id
+    )
 
-    # Lấy ngẫu nhiên 10 từ trong danh sách
-    random_keywords = random.sample(words, min(len(words), 10))
-    url = f"{CHATBOT_URL}/datasets/270f6651-fb96-461d-a489-6658d1d2624b/documents/ad1e6bed-6c8d-42c2-a6f6-d0aecedcf1ff/segments/{segment_id}"
-    logger.debug(f"segment_id: {segment_id}, content: {content} \n url: {url}")
-    if not segment_id or content == "undefined" or not content:
-        raise HTTPException(status_code=400, detail="segment_id or updated_file_id missing")
-    # Dữ liệu gửi qua API
-    payload = {
-        "segment": {
-            "content": f"{content}",
-            "keywords": random_keywords,
-            "enabled": "true",
-        }
-    }
-    headers = {
-        "Authorization": f"Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
-        "Content-Type": "application/json",
-    }
 
-    # Gửi request POST đến API
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, headers=headers, json=payload)
-
-    logger.debug(f"response: {response.json() if response.status_code == 200 else 'No response'}")
-
-    # Kiểm tra nếu request thành công
-    if response.status_code == 200:
-        return {"message":"Chunk updated successfully"}
-    else:
-        raise HTTPException(status_code=400, detail="No file uploaded")
-
-@router.post("/chat_messages")
-async def call_chat_messages_api_and_process_stream(
-    user_message, user_id, file_id, conversation_id
+@router.post("/update_segment", response_model=UpdateSegmentResponse)
+async def update_segment(
+    request: UpdateSegmentRequest = Body(
+        ..., example={"segment_id": "segment-123", "content": "Updated content here"}
+    ),
+    db: AsyncSession = Depends(get_db),
 ):
-    headers = {
-        "Authorization": f"Bearer {DIFY_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    """
+    Update a segment's content.
 
-    body = {
-        "inputs": {"chunk_id": file_id},
-        "query": user_message,
-        "response_mode": "streaming",
-        "conversation_id": conversation_id if conversation_id else "",
-        "user": user_id,
-    }
-    logger.debug(f"Body: {body}")
-    try:
-        url = f"{CHATBOT_URL}/chat-messages"
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, json=body)
-            final_result = ""
-            buffer = ""
-            conversation_id = None
-            message_id = None
+    - **segment_id**: ID of the segment to update
+    - **content**: New content for the segment
+    """
+    chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
+    success, error = await chat_service.update_segment(
+        request.segment_id, request.content
+    )
 
-            async for chunk in response.aiter_lines():
-                # Bỏ qua các chunk rỗng
-                if not chunk:
-                    continue
+    if success:
+        return UpdateSegmentResponse(
+            message="Segment updated successfully", success=True
+        )
+    raise HTTPException(status_code=400, detail=error or "Failed to update segment")
 
-                # Giải mã chunk từ bytes thành string
-                chunk_str = chunk
-                buffer += chunk_str
 
-                # Sử dụng regex để tách từng JSON object
-                json_blocks = re.split(r"(?<=\})\s*(?=data: {)", buffer)
+@router.post("/chat_messages", response_model=ChatResponse)
+async def chat_messages(
+    chat_message: ChatMessage = Body(
+        ...,
+        example={
+            "user_message": "What can you tell me about this document?",
+            "user_id": "user-123",
+            "file_id": "file-123",
+            "conversation_id": "conv-123",
+        },
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Send a message to the chat bot and get a response.
 
-                # Gán phần còn lại của buffer chưa hoàn chỉnh
-                buffer = json_blocks.pop() if json_blocks else ""
+    - **user_message**: The message from the user
+    - **user_id**: ID of the user sending the message
+    - **file_id**: ID of the file being discussed
+    - **conversation_id**: Optional ID of the ongoing conversation
+    """
+    chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
 
-                for json_block in json_blocks:
-                    json_block = json_block.strip()
-                    if json_block.startswith("data:"):
-                        json_string = json_block.replace("data: ", "")
-                        try:
-                            json_data = json.loads(json_string)
-                            logger.debug(f"json_data: {json_data}")
+    # Get bot for logging
+    bot = await chat_service.get_bot_by_type("dify")
+    if not bot:
+        raise HTTPException(status_code=404, detail="Chat bot not found")
 
-                            # Kiểm tra tín hiệu kết thúc stream
-                            if json_data.get("event") in [
-                                "tts_message_end",
-                                "message_end",
-                            ]:
-                                return (
-                                    final_result,
-                                    conversation_id,
-                                    message_id,
-                                )  # Kết thúc stream
+    # Create user message log
+    user_message_log = MessageLogCreate(
+        notebook_id=chat_message.conversation_id,
+        bot_id=bot.bot_id,
+        content=chat_message.user_message,
+        from_user=True,
+    )
+    await chat_service.create_message_log(user_message_log)
 
-                            if "answer" in json_data:
-                                final_result += json_data["answer"]
-                            if "conversation_id" in json_data:
-                                conversation_id = json_data["conversation_id"]
-                            if "message_id" in json_data:
-                                message_id = json_data["message_id"]
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Error parsing JSON: {e}")
+    # Process chat message
+    result = await chat_service.process_chat_message(
+        chat_message.user_message,
+        chat_message.user_id,
+        chat_message.file_id,
+        chat_message.conversation_id,
+    )
 
-            # Xử lý phần còn lại trong buffer khi kết thúc stream
-            if buffer.startswith("data:"):
-                json_string = buffer.replace("data: ", "")
-                try:
-                    json_data = json.loads(json_string)
-                    logger.debug(f"json_data (remaining buffer): {json_data}")
-                    if "answer" in json_data:
-                        final_result += json_data["answer"]
-                    if "conversation_id" in json_data:
-                        conversation_id = json_data["conversation_id"]
-                    if "message_id" in json_data:
-                        message_id = json_data["message_id"]
-                except json.JSONDecodeError as e:
-                    logger.error(f"Error parsing JSON (remaining buffer): {e}")
+    if not result:
+        raise HTTPException(status_code=500, detail="Error processing chat message")
 
-            return {
-                "final_result": final_result,
-                "conversation_id": conversation_id,
-                "message_id": message_id,
-            }
+    # Create bot response log
+    bot_message_log = MessageLogCreate(
+        notebook_id=chat_message.conversation_id,
+        bot_id=bot.bot_id,
+        content=result["final_result"],
+        from_user=False,
+    )
+    await chat_service.create_message_log(bot_message_log)
 
-    except httpx.RequestError as e:
-        logger.error(f"Error calling the API: {e}")
-        raise HTTPException(status_code=500, detail="Error calling the external API")
+    return ChatResponse(**result)
+
+
+@router.get("/history/{notebook_id}", response_model=List[MessageLogResponse])
+async def get_chat_history(
+    notebook_id: str,
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_token),
+):
+    """
+    Get chat history for a specific notebook.
+
+    - **notebook_id**: ID of the notebook to get history for
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return
+    """
+    chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
+    messages = await chat_service.get_chat_history(notebook_id, skip, limit)
+    return messages
