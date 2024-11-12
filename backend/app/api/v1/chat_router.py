@@ -80,7 +80,14 @@ async def upload_file(
     if error:
         raise HTTPException(status_code=400, detail=error)
 
-    await chat_service.create_first_conversation_id(file_id)
+    # Only create conversation ID if this is first file in notebook
+    if notebook_id:
+        existing_files = await chat_service.get_files_in_notebook(notebook_id)
+        if len(existing_files) == 1:
+            await chat_service.create_first_conversation_id(file_id)
+    else:
+        # If no notebook_id, always create conversation ID
+        await chat_service.create_first_conversation_id(file_id)
 
     return FileUploadResponse(
         message=f"File {file.filename} uploaded successfully", file_id=file_id
