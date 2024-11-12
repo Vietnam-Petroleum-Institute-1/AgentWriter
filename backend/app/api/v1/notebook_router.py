@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, verify_token
 from app.models.notebook import Notebook
 from app.models.user import User
-from app.schemas.notebook import NotebookCreate, NotebookResponse, NotebookUpdate
+from app.schemas.notebook import NotebookCreate, NotebookResponse, NotebookUpdate, NotebookWithFilesResponse
 from app.services.notebook import NotebookService
 
 router = APIRouter(prefix="/notebooks", tags=["Notebooks"])
@@ -40,7 +40,7 @@ async def read_notebooks(
 
 @router.get(
     "/{notebook_id}",
-    response_model=NotebookResponse,
+    response_model=NotebookWithFilesResponse,
     dependencies=[Depends(verify_token)],
 )
 async def read_notebook(notebook_id: str, db: AsyncSession = Depends(get_db)):

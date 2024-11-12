@@ -5,8 +5,6 @@ from app.models.base import BaseModel
 
 
 class File(BaseModel):
-    __tablename__ = "file"
-
     file_id = Column(
         String(100), primary_key=True, default=lambda: BaseModel.generate_id("file")
     )
@@ -33,4 +31,4 @@ class File(BaseModel):
     content = Column(Text)
     file_path = Column(String(255), nullable=False)
 
-    notebook = relationship("Notebook", backref="files")
+    notebook = relationship("Notebook", back_populates="files")
