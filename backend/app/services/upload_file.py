@@ -19,7 +19,7 @@ class UploadFileService:
             file_id=file_data.file_id,
             user_id=file_data.user_id,
             session_id=file_data.session_id,
-            notebook_id=file_data.conversation_id,
+            notebook_id=file_data.notebook_id,
             file_name=file_data.file_name,
             file_path=file_data.file_path,
             file_size=file_data.file_size,
@@ -31,8 +31,8 @@ class UploadFileService:
 
         # Add the file record to the session and commit it
         self.db.add(file)
-        self.db.commit()
-        self.db.refresh(file)
+        await self.db.commit()
+        await self.db.refresh(file)
 
         print("added file to db")
         return file

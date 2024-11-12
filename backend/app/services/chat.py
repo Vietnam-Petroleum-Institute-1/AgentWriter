@@ -10,7 +10,9 @@ from sqlalchemy.future import select
 
 from app.core.config import settings
 from app.models.bot import Bot
+from app.models.file import File
 from app.models.message_log import MessageLog
+from app.models.notebook import Notebook
 from app.schemas.chat import MessageLogCreate
 from app.schemas.file import FileData
 from app.services.upload_file import UploadFileService
@@ -54,6 +56,24 @@ class ChatService:
 
         return file_id, None
 
+    async def create_first_conversation_id(self, file_id: str):
+        # Save first conversation id
+        file = await self.get_file_by_id(file_id)
+        first_chat_response = await self.process_chat_message(
+            user_message="Hello",
+            user_id=file.user_id,
+            file_id=file_id,
+        )
+        print(first_chat_response)
+        if first_chat_response:
+            conversation_id = first_chat_response.get("conversation_id")
+
+        # Save conversation to notebook table
+        notebook = await self.get_notebook_by_id(file.notebook_id)
+        if notebook:
+            notebook.conversation_dify_id = conversation_id
+            await self.db.commit()
+
     async def update_segment(
         self, segment_id: str, content: str
     ) -> Tuple[bool, Optional[str]]:
@@ -91,13 +111,11 @@ class ChatService:
             return False, f"Error updating segment: {str(e)}"
 
     async def process_chat_message(
-        self,
-        user_message: str,
-        user_id: str,
-        file_id: str,
-        conversation_id: Optional[str] = None,
+        self, user_message: str, user_id: str, file_id: str
     ) -> Optional[Dict[str, Any]]:
         """Process a chat message and get response"""
+        file = await self.get_file_by_id(file_id)
+        notebook = await self.get_notebook_by_id(file.notebook_id)
         try:
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
@@ -108,7 +126,11 @@ class ChatService:
                 "inputs": {"chunk_id": file_id},
                 "query": user_message,
                 "response_mode": "streaming",
-                "conversation_id": conversation_id if conversation_id else "",
+                "conversation_id": (
+                    notebook.conversation_dify_id
+                    if notebook.conversation_dify_id
+                    else ""
+                ),
                 "user": user_id,
             }
 
@@ -234,3 +256,15 @@ class ChatService:
         except Exception as e:
             logger.error(f"Error extracting DOCX content: {e}")
             raise
+
+    async def get_notebook_by_id(self, notebook_id: str) -> Optional[Notebook]:
+        """Get notebook by id"""
+        result = await self.db.execute(
+            select(Notebook).filter(Notebook.notebook_id == notebook_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_file_by_id(self, file_id: str) -> Optional[File]:
+        """Get file by id"""
+        result = await self.db.execute(select(File).filter(File.file_id == file_id))
+        return result.scalar_one_or_none()

@@ -45,7 +45,7 @@ def get_file_type(filename: str) -> str:
 async def upload_file(
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
-    conversation_id: Optional[str] = Form(None),
+    notebook_id: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(verify_token),
 ):
@@ -54,10 +54,8 @@ async def upload_file(
 
     - **file**: The file to upload (supported types: csv, docx)
     - **session_id**: Optional session ID
-    - **conversation_id**: Optional conversation ID
+    - **notebook_id**: Optional notebook ID
     """
-    if not file:
-        raise HTTPException(status_code=400, detail="File not found in request")
 
     mime_type = get_file_type(file.filename)
     file_content = await file.read()
@@ -68,7 +66,7 @@ async def upload_file(
         file_id="",  # Will be set after upload
         user_id=user_id,
         session_id=session_id,
-        conversation_id=conversation_id,
+        notebook_id=notebook_id,
         file_name=file.filename,
         file_path=os.path.join(UPLOAD_FOLDER, file.filename),
         file_size=file.size,
@@ -81,6 +79,8 @@ async def upload_file(
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
+
+    await chat_service.create_first_conversation_id(file_id)
 
     return FileUploadResponse(
         message=f"File {file.filename} uploaded successfully", file_id=file_id
@@ -141,33 +141,32 @@ async def chat_messages(
         raise HTTPException(status_code=404, detail="Chat bot not found")
 
     # Create user message log
-    user_message_log = MessageLogCreate(
-        notebook_id=chat_message.conversation_id,
-        bot_id=bot.bot_id,
-        content=chat_message.user_message,
-        from_user=True,
-    )
-    await chat_service.create_message_log(user_message_log)
+    # user_message_log = MessageLogCreate(
+    #     notebook_id=chat_message.conversation_id,
+    #     bot_id=bot.bot_id,
+    #     content=chat_message.user_message,
+    #     from_user=True,
+    # )
+    # await chat_service.create_message_log(user_message_log)
 
     # Process chat message
     result = await chat_service.process_chat_message(
         chat_message.user_message,
         chat_message.user_id,
         chat_message.file_id,
-        chat_message.conversation_id,
     )
 
     if not result:
         raise HTTPException(status_code=500, detail="Error processing chat message")
 
     # Create bot response log
-    bot_message_log = MessageLogCreate(
-        notebook_id=chat_message.conversation_id,
-        bot_id=bot.bot_id,
-        content=result["final_result"],
-        from_user=False,
-    )
-    await chat_service.create_message_log(bot_message_log)
+    # bot_message_log = MessageLogCreate(
+    #     notebook_id=chat_message.conversation_id,
+    #     bot_id=bot.bot_id,
+    #     content=result["final_result"],
+    #     from_user=False,
+    # )
+    # await chat_service.create_message_log(bot_message_log)
 
     return ChatResponse(**result)
 
