@@ -6,9 +6,7 @@ from pydantic import BaseModel
 
 class ChatMessage(BaseModel):
     user_message: str
-    user_id: str
     file_id: str
-    conversation_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

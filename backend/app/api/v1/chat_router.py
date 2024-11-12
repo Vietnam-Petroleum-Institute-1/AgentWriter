@@ -125,20 +125,17 @@ async def chat_messages(
         ...,
         example={
             "user_message": "What can you tell me about this document?",
-            "user_id": "user-123",
             "file_id": "file-123",
-            "conversation_id": "conv-123",
         },
     ),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(verify_token),
 ):
     """
     Send a message to the chat bot and get a response.
 
     - **user_message**: The message from the user
-    - **user_id**: ID of the user sending the message
     - **file_id**: ID of the file being discussed
-    - **conversation_id**: Optional ID of the ongoing conversation
     """
     chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
 
@@ -159,7 +156,7 @@ async def chat_messages(
     # Process chat message
     result = await chat_service.process_chat_message(
         chat_message.user_message,
-        chat_message.user_id,
+        user_id,
         chat_message.file_id,
     )
 
