@@ -1,7 +1,6 @@
 import os
 from typing import List, Optional
 import logging
-import httpx
 
 from fastapi import (
     APIRouter,
@@ -30,6 +29,7 @@ from app.schemas.chat import (
 )
 from app.schemas.file import FileData
 from app.services.chat import ChatService
+from app.services.download_file import DownloadFileService
 
 router = APIRouter(prefix="/chat", tags=["Dify chatbot"])
 logger = logging.getLogger(__name__)
@@ -197,62 +197,15 @@ async def get_chat_history(
     messages = await chat_service.get_chat_history(notebook_id, skip, limit)
     return messages
 
-@router.post("/download_file", response_model=ChatResponse)
-async def download_file(
-    download_segment_id: str
-):
+@router.post("/download_file")
+async def download_file(download_segment_id: str):
     """
     Push a segment_id to the server and get a paper's content.
-
-    - **user_message**: The message from the user
-    - **file_id**: ID of the file being discussed
     """
+    download_file_service=DownloadFileService(settings.CHATBOT_URL)
 
+    res, error = await download_file_service.download(download_segment_id)
 
-    url = f"{settings.CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments"
-    logger.debug(f"Received download_segment_id: {download_segment_id}")
-
-    if not download_segment_id or download_segment_id == "undefined":
-        raise HTTPException(status_code=400, detail="segment_id or updated_file_id missing")
-
-    headers = {
-        "Authorization": "Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
-        "Content-Type": "application/json",
-    }
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, headers=headers)
-        except httpx.RequestError as e:
-            logger.error(f"Request to {url} failed: {e}")
-            raise HTTPException(status_code=500, detail="Failed to connect to API")
-        
-        if response.status_code == 200:
-            try:
-                response_data = response.json().get("data", [])
-                logger.debug(f"Received response data: {response_data}")
-
-                if not response_data:
-                    logger.warning("Empty data received from API")
-                    raise HTTPException(status_code=404, detail="No segments available")
-
-                for segment in response_data:
-                    segment_id = segment["id"]
-                    content = segment["content"]
-                    if download_segment_id in segment_id:
-                        return {"message": content}
-
-                logger.info(f"No segment with ID matching {download_segment_id} found.")
-                raise HTTPException(status_code=404, detail="Segment ID not found")
-
-            except ValueError as e:
-                logger.error(f"Error decoding JSON response: {e}")
-                raise HTTPException(status_code=500, detail="Failed to decode response")
-        
-        elif response.status_code == 404:
-            raise HTTPException(status_code=404, detail="Segments not found")
-        else:
-            logger.error(
-                f"Unexpected status code {response.status_code}. Response: {response.text}"
-            )
-            raise HTTPException(status_code=500, detail="Failed to download file")
+    if res:
+        return res
+    raise HTTPException(status_code=500, detail=error or "Failed to download file")
