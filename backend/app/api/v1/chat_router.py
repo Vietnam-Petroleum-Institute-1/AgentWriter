@@ -17,6 +17,8 @@ from fastapi import (
 from fastapi.param_functions import Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette import EventSourceResponse
+
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -149,15 +151,20 @@ async def chat_messages(
     if not bot:
         raise HTTPException(status_code=404, detail="Chat bot not found")
     
+    # Return the streaming response to the client
     async def stream_data():
-        async for chunk in chat_service.process_chat_message(
-            chat_message.user_message,
-            chat_message.user_id,  # thay bằng user_id hợp lệ
-            chat_message.file_id
-        ):
-            yield chunk
+        try:
+            async for chunk in chat_service.process_chat_message(
+                chat_message.user_message,
+                chat_message.user_id,  # Valid user ID
+                chat_message.file_id
+            ):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Error during streaming: {e}")
+            yield f"Error: {str(e)}"
 
-    return StreamingResponse(stream_data(),  media_type='text/event-stream')
+    return EventSourceResponse(stream_data())
     
 async def get_chat_history(
     notebook_id: str,

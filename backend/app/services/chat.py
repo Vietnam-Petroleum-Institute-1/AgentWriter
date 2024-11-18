@@ -2,6 +2,7 @@ import json
 import logging
 import random
 import re
+import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -117,9 +118,10 @@ class ChatService:
         """Process a chat message and stream response chunks."""
         file = await self.get_file_by_id(file_id)
         notebook = await self.get_notebook_by_id(file.notebook_id)
-        print(notebook.conversation_dify_id)
 
         try:
+            result = await self.get_chat_history(notebook_id=notebook.conversation_dify_id, skip=0, limit=5)
+            print(result)
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
                 "Content-Type": "application/json",
@@ -138,26 +140,24 @@ class ChatService:
             url = f"{self.chatbot_url}/chat-messages"
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=headers, json=body)
-                print(response.status_code)
                 async for line in response.aiter_lines():
-                    # await asyncio.sleep(1)
-                    print("line: "+line)  # Kiểm tra từng dòng
-                    yield line + "\n"
+                    line = line.replace("data: ", "")
+                    if line.strip():
+                        try:
+                            json_data = json.loads(line)
+                            logger.debug(f"Received JSON data: {json_data}")
+                        except json.JSONDecodeError as e:
+                            print( "Error: Invalid JSON response\n")
+                            continue
 
 
-                if response.status_code != 200:
-                    error_message = await response.text()
-                    logger.error(f"API returned status {response.status_code}: {error_message}")
-                    yield f"Error: {error_message}\n"
-                    return
-
-        except httpx.RequestError as e:
-            logger.error(f"Request error: {str(e)}")
-            yield f"Error: Unable to connect to the chat API\n"
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error: {str(e)}")
-            yield f"Error: {e.response.status_code} - {e.response.text}\n"
+                        # Stream the 'answer' field as it comes in
+                        if "answer" in json_data:
+                            answer = json_data["answer"]
+                            # await asyncio.sleep(0.5) 
+                            # yield json.dumps({"answer": answer})
+                            yield answer
+                            print(answer)
 
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
