@@ -117,8 +117,8 @@ class ChatService:
         """Process a chat message and stream response chunks."""
         file = await self.get_file_by_id(file_id)
         notebook = await self.get_notebook_by_id(file.notebook_id)
-        logger.info("notebook.conversation_dify_id")
         print(notebook.conversation_dify_id)
+
         try:
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
@@ -126,7 +126,7 @@ class ChatService:
             }
 
             body = {
-                "inputs": {"chunk_id": file_id},
+                "inputs": {"chunk_id": file_id, "history": ""},
                 "query": user_message,
                 "response_mode": "streaming",
                 "conversation_id": (
@@ -138,16 +138,18 @@ class ChatService:
             url = f"{self.chatbot_url}/chat-messages"
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=headers, json=body)
+                print(response.status_code)
+                async for line in response.aiter_lines():
+                    # await asyncio.sleep(1)
+                    print("line: "+line)  # Kiểm tra từng dòng
+                    yield line + "\n"
+
 
                 if response.status_code != 200:
                     error_message = await response.text()
                     logger.error(f"API returned status {response.status_code}: {error_message}")
                     yield f"Error: {error_message}\n"
                     return
-            
-                # Check if response is streaming
-                async for line in response.aiter_lines():
-                    yield line +"\n"
 
         except httpx.RequestError as e:
             logger.error(f"Request error: {str(e)}")

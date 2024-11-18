@@ -14,8 +14,8 @@ from fastapi import (
     status,
     WebSocket
 )
-from starlette.websockets import WebSocketDisconnect
 from fastapi.param_functions import Body
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -124,42 +124,41 @@ async def update_segment(
     raise HTTPException(status_code=400, detail=error or "Failed to update segment")
 
 
-@router.post("/chat_messages")
+@router.post("/chat_messages", response_model=ChatResponse)
 async def chat_messages(
-    websocket: WebSocket, 
-    file_id: str, 
-    user_id: str, 
-    db: AsyncSession = Depends(get_db)
+    chat_message: ChatMessage = Body(
+        ...,
+        example={
+            "user_message": "What can you tell me about this document?",
+            "file_id": "file-123",
+            "user_id": "user-123",
+        },
+    ),
+    db: AsyncSession = Depends(get_db),
 ):
-    # Initialize ChatService and fetch required information
+    """
+    Send a message to the chat bot and get a response.
+
+    - **user_message**: The message from the user
+    - **file_id**: ID of the file being discussed
+    """
     chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
+
+    # Get bot for logging
     bot = await chat_service.get_bot_by_type("dify")
     if not bot:
-        return {"error": "Bot not found"}
+        raise HTTPException(status_code=404, detail="Chat bot not found")
+    
+    async def stream_data():
+        async for chunk in chat_service.process_chat_message(
+            chat_message.user_message,
+            chat_message.user_id,  # thay bằng user_id hợp lệ
+            chat_message.file_id
+        ):
+            yield chunk
 
-    try:
-        while True:
-            # Receive user_message from WebSocket
-            user_message = await websocket.receive_text()
-            
-            # Process chat message
-            result = chat_service.process_chat_message(user_message, user_id, file_id)
-            if not result:
-                await websocket.send_text("Error processing chat message")
-                await websocket.close(code=1011)  # Close with error code
-                return
-            else:
-                # Send each response chunk to WebSocket client
-                async for chunk in result:
-                    await websocket.send_text(chunk)
-    except WebSocketDisconnect:
-        print("Client disconnected")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        await websocket.close(code=1011)
-
-
-@router.get("/history/{notebook_id}", response_model=List[MessageLogResponse])
+    return StreamingResponse(stream_data(),  media_type='text/event-stream')
+    
 async def get_chat_history(
     notebook_id: str,
     skip: int = 0,
