@@ -124,21 +124,18 @@ async def update_segment(
     raise HTTPException(status_code=400, detail=error or "Failed to update segment")
 
 
-@router.websocket("/chat_messages")
+@router.post("/chat_messages")
 async def chat_messages(
     websocket: WebSocket, 
     file_id: str, 
     user_id: str, 
     db: AsyncSession = Depends(get_db)
 ):
-    await websocket.accept()
-
     # Initialize ChatService and fetch required information
     chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
     bot = await chat_service.get_bot_by_type("dify")
     if not bot:
-        await websocket.close(code=1000)  # Close with normal closure if bot not found
-        return
+        return {"error": "Bot not found"}
 
     try:
         while True:

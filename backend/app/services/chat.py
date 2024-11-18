@@ -139,13 +139,27 @@ class ChatService:
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=headers, json=body)
 
+                if response.status_code != 200:
+                    error_message = await response.text()
+                    logger.error(f"API returned status {response.status_code}: {error_message}")
+                    yield f"Error: {error_message}\n"
+                    return
+            
                 # Check if response is streaming
                 async for line in response.aiter_lines():
-                    yield line  # Send each line to the WebSocket
+                    yield line +"\n"
 
         except httpx.RequestError as e:
-            logger.error(f"Error calling chat API: {e}")
-            return
+            logger.error(f"Request error: {str(e)}")
+            yield f"Error: Unable to connect to the chat API\n"
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error: {str(e)}")
+            yield f"Error: {e.response.status_code} - {e.response.text}\n"
+
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            yield f"Error: {str(e)}\n"
 
 
     async def create_message_log(
