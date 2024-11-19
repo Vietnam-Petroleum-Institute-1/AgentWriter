@@ -1,14 +1,13 @@
+import asyncio
 import json
 import logging
 import random
 import re
-import asyncio
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import AsyncGenerator
 
 from app.core.config import settings
 from app.models.bot import Bot
@@ -120,7 +119,9 @@ class ChatService:
         notebook = await self.get_notebook_by_id(file.notebook_id)
 
         try:
-            result = await self.get_chat_history(notebook_id=notebook.conversation_dify_id, skip=0, limit=5)
+            result = await self.get_chat_history(
+                notebook_id=notebook.conversation_dify_id, skip=0, limit=5
+            )
             print(result)
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
@@ -132,7 +133,9 @@ class ChatService:
                 "query": user_message,
                 "response_mode": "streaming",
                 "conversation_id": (
-                    notebook.conversation_dify_id if notebook.conversation_dify_id else ""
+                    notebook.conversation_dify_id
+                    if notebook.conversation_dify_id
+                    else ""
                 ),
                 "user": user_id,
             }
@@ -147,14 +150,13 @@ class ChatService:
                             json_data = json.loads(line)
                             logger.debug(f"Received JSON data: {json_data}")
                         except json.JSONDecodeError as e:
-                            print( "Error: Invalid JSON response\n")
+                            print("Error: Invalid JSON response\n")
                             continue
-
 
                         # Stream the 'answer' field as it comes in
                         if "answer" in json_data:
                             answer = json_data["answer"]
-                            # await asyncio.sleep(0.5) 
+                            # await asyncio.sleep(0.5)
                             # yield json.dumps({"answer": answer})
                             yield answer
                             print(answer)
@@ -163,13 +165,17 @@ class ChatService:
             logger.error(f"Unexpected error: {str(e)}")
             yield f"Error: {str(e)}\n"
 
-
     async def create_message_log(
         self, message_data: MessageLogCreate
     ) -> Optional[MessageLog]:
         """Create a message log entry"""
         try:
-            message = MessageLog(**message_data.dict())
+            message = MessageLog(
+                notebook_id=message_data.notebook_id,
+                bot_id=message_data.bot_id,
+                content=message_data.content,
+                from_user=message_data.from_user,
+            )
             self.db.add(message)
             await self.db.commit()
             await self.db.refresh(message)

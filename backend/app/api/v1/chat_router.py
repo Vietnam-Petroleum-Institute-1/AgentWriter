@@ -1,8 +1,8 @@
+import logging
 import os
 from typing import List, Optional
-import logging
-import httpx
 
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -11,14 +11,13 @@ from fastapi import (
     HTTPException,
     Request,
     UploadFile,
+    WebSocket,
     status,
-    WebSocket
 )
 from fastapi.param_functions import Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette import EventSourceResponse
-
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -128,44 +127,58 @@ async def update_segment(
 
 @router.post("/chat_messages", response_model=ChatResponse)
 async def chat_messages(
-    chat_message: ChatMessage = Body(
-        ...,
-        example={
-            "user_message": "What can you tell me about this document?",
-            "file_id": "file-123",
-            "user_id": "user-123",
-        },
-    ),
+    chat_message: ChatMessage = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Send a message to the chat bot and get a response.
-
-    - **user_message**: The message from the user
-    - **file_id**: ID of the file being discussed
-    """
     chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
 
     # Get bot for logging
     bot = await chat_service.get_bot_by_type("dify")
     if not bot:
         raise HTTPException(status_code=404, detail="Chat bot not found")
-    
-    # Return the streaming response to the client
+
+    # Get file and notebook info
+    file = await chat_service.get_file_by_id(chat_message.file_id)
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Log user message
+    user_message_log = MessageLogCreate(
+        notebook_id=file.notebook_id,
+        bot_id=bot.bot_id,
+        content=chat_message.user_message,
+        from_user=True,
+    )
+    await chat_service.create_message_log(user_message_log)
+
+    # Return streaming response with bot message logging
     async def stream_data():
+        full_bot_response = ""
         try:
             async for chunk in chat_service.process_chat_message(
                 chat_message.user_message,
-                chat_message.user_id,  # Valid user ID
-                chat_message.file_id
+                chat_message.user_id,
+                chat_message.file_id,
             ):
+                full_bot_response += chunk
                 yield chunk
+
+            # Log bot response after complete
+            bot_message_log = MessageLogCreate(
+                notebook_id=file.notebook_id,
+                bot_id=bot.bot_id,
+                content=full_bot_response,
+                from_user=False,
+            )
+            await chat_service.create_message_log(bot_message_log)
+
         except Exception as e:
             logger.error(f"Error during streaming: {e}")
             yield f"Error: {str(e)}"
 
     return EventSourceResponse(stream_data())
-    
+
+
 async def get_chat_history(
     notebook_id: str,
     skip: int = 0,
@@ -184,10 +197,9 @@ async def get_chat_history(
     messages = await chat_service.get_chat_history(notebook_id, skip, limit)
     return messages
 
+
 @router.post("/download_file", response_model=ChatResponse)
-async def download_file(
-    download_segment_id: str
-):
+async def download_file(download_segment_id: str):
     """
     Push a segment_id to the server and get a paper's content.
 
@@ -195,12 +207,13 @@ async def download_file(
     - **file_id**: ID of the file being discussed
     """
 
-
     url = f"{settings.CHATBOT_URL}/datasets/6f2c01c5-9773-4bf0-b058-6b2e42787c1c/documents/9372129a-8f6f-46c2-bdd1-bed9ff5adfa6/segments"
     logger.debug(f"Received download_segment_id: {download_segment_id}")
 
     if not download_segment_id or download_segment_id == "undefined":
-        raise HTTPException(status_code=400, detail="segment_id or updated_file_id missing")
+        raise HTTPException(
+            status_code=400, detail="segment_id or updated_file_id missing"
+        )
 
     headers = {
         "Authorization": "Bearer dataset-oB18KobCvufR8Gf0YjlKW9Ms",
@@ -213,7 +226,7 @@ async def download_file(
         except httpx.RequestError as e:
             logger.error(f"Request to {url} failed: {e}")
             raise HTTPException(status_code=500, detail="Failed to connect to API")
-        
+
         if response.status_code == 200:
             try:
                 response_data = response.json().get("data", [])
@@ -235,7 +248,7 @@ async def download_file(
             except ValueError as e:
                 logger.error(f"Error decoding JSON response: {e}")
                 raise HTTPException(status_code=500, detail="Failed to decode response")
-        
+
         elif response.status_code == 404:
             raise HTTPException(status_code=404, detail="Segments not found")
         else:

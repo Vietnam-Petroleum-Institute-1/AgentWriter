@@ -27,6 +27,9 @@ class MessageLogCreate(BaseModel):
     content: str
     from_user: bool
 
+    class Config:
+        orm_mode = True
+
 
 class MessageLogResponse(BaseModel):
     message_id: str
