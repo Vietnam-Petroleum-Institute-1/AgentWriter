@@ -137,10 +137,10 @@ class ChatService:
                 "Authorization": f"Bearer {self.dify_api_key}",
                 "Content-Type": "application/json",
             }
-            print(history_chat.reverse)
+            print(history_chat)
 
             body = {
-                "inputs": {"chunk_id": file_id, "history": str(history_chat.reverse)},
+                "inputs": {"chunk_id": file_id, "history": str(history_chat)},
                 "query": user_message,
                 "response_mode": "streaming",
                 # "conversation_id": (
