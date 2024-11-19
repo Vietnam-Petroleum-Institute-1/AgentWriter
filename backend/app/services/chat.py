@@ -137,10 +137,10 @@ class ChatService:
                 "Authorization": f"Bearer {self.dify_api_key}",
                 "Content-Type": "application/json",
             }
-            print(history_chat)
+            print(history_chat.reverse)
 
             body = {
-                "inputs": {"chunk_id": file_id, "history": str(history_chat)},
+                "inputs": {"chunk_id": file_id, "history": str(history_chat.reverse)},
                 "query": user_message,
                 "response_mode": "streaming",
                 # "conversation_id": (
@@ -164,6 +164,7 @@ class ChatService:
                         except json.JSONDecodeError as e:
                             print("Error: Invalid JSON response\n")
                             continue
+                        
 
                         # Stream the 'answer' field as it comes in
                         if "answer" in json_data:
