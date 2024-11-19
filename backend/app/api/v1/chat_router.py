@@ -149,7 +149,6 @@ async def chat_messages(
         content=chat_message.user_message,
         from_user=True,
     )
-    await chat_service.create_message_log(user_message_log)
 
     # Return streaming response with bot message logging
     async def stream_data():
@@ -170,6 +169,7 @@ async def chat_messages(
                 content=full_bot_response,
                 from_user=False,
             )
+            await chat_service.create_message_log(user_message_log)
             await chat_service.create_message_log(bot_message_log)
 
         except Exception as e:
@@ -178,13 +178,12 @@ async def chat_messages(
 
     return EventSourceResponse(stream_data())
 
-
+@router.post("/chat_history")
 async def get_chat_history(
     notebook_id: str,
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_token),
 ):
     """
     Get chat history for a specific notebook.

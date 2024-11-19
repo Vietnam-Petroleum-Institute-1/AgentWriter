@@ -1,4 +1,4 @@
-import asyncio
+import json
 import json
 import logging
 import random
@@ -120,23 +120,35 @@ class ChatService:
 
         try:
             result = await self.get_chat_history(
-                notebook_id=notebook.conversation_dify_id, skip=0, limit=5
+                notebook_id=notebook.notebook_id, skip=0, limit=5
             )
-            print(result)
+            history_chat = [] 
+            print("Chat History:")
+            for message in result:
+                print(f"Content: {message.content}")
+                print(f"From User: {message.from_user}")
+
+                if(message.from_user):
+                    history_chat.append({'user': message.content})
+                else:
+                    history_chat.append({'bot': message.content})
+                print("-" * 50)  # Separator between messages
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
                 "Content-Type": "application/json",
             }
+            print(history_chat)
 
             body = {
-                "inputs": {"chunk_id": file_id, "history": ""},
+                "inputs": {"chunk_id": file_id, "history": str(history_chat)},
                 "query": user_message,
                 "response_mode": "streaming",
-                "conversation_id": (
-                    notebook.conversation_dify_id
-                    if notebook.conversation_dify_id
-                    else ""
-                ),
+                # "conversation_id": (
+                #     notebook.conversation_dify_id
+                #     if notebook.conversation_dify_id
+                #     else ""
+                # ),
+                "conversation_id": (""),
                 "user": user_id,
             }
 
@@ -159,7 +171,6 @@ class ChatService:
                             # await asyncio.sleep(0.5)
                             # yield json.dumps({"answer": answer})
                             yield answer
-                            print(answer)
 
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
