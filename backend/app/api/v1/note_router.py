@@ -67,7 +67,7 @@ async def delete_note(note_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Note not found")
     return note
 
-@router.get("/download")
+@router.post("/download")
 async def download_notebook(node_ids: List[str],  db: AsyncSession = Depends(get_db)):
     note_service = NoteService(db)
     return await note_service.download_markdown(node_ids)
