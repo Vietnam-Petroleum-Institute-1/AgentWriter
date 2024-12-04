@@ -74,13 +74,13 @@ class NoteService:
         return markdown_content
 
 
-    async def download_markdown(self, notebook_id: str) -> FileResponse:
+    async def download_markdown(self, node_ids: List[str]) -> FileResponse:
         # Create a .md file to download
-        markdown_content = await self.generate_markdown_content(notebook_id)
+        markdown_content = await self.generate_markdown_content(node_ids)
 
         # Tạo stream từ nội dung Markdown
         buffer = BytesIO(markdown_content.encode("utf-8"))
-        filename = f"notebook_{notebook_id}.md"
+        filename = f"notebook_{node_ids[0]}.md"
 
         # Trả về nội dung dưới dạng StreamingResponse
         return StreamingResponse(
