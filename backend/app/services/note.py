@@ -56,9 +56,9 @@ class NoteService:
         await self.db.commit()
         return note
     
-    async def generate_markdown_content(self, notebook_id: str) -> str:
+    async def generate_markdown_content(self,node_ids: List[str]) -> str:
         result = await self.db.execute(
-            select(Note).filter(Note.notebook_id == notebook_id)
+            select(Note).filter(Note.note_id.in_(node_ids))
         )
         notes = result.scalars().all()
 
