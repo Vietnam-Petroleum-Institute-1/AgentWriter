@@ -223,36 +223,61 @@ class ChatService:
             select(File).filter(File.notebook_id == notebook_id)
         )
         return result.scalars().all()
+    
+    async def _process_stream_response(
+        self, response: httpx.Response
+    ) -> Dict[str, Any]:
+        """Process streaming response from chat API"""
+        final_result = ""
+        buffer = ""
+        conversation_id = None
+        message_id = None
 
-    async def process_chat_message(
-        self, user_message: str, user_id: str, file_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Process a chat message and get response"""
-        file = await self.get_file_by_id(file_id)
-        notebook = await self.get_notebook_by_id(file.notebook_id)
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.dify_api_key}",
-                "Content-Type": "application/json",
-            }
+        async for chunk in response.aiter_lines():
+            if not chunk:
+                continue
 
-            body = {
-                "inputs": {"chunk_id": file_id},
-                "query": user_message,
-                "response_mode": "streaming",
-                "conversation_id": (
-                    notebook.conversation_dify_id
-                    if notebook.conversation_dify_id
-                    else ""
-                ),
-                "user": user_id,
-            }
+            buffer += chunk
+            json_blocks = re.split(r"(?<=\})\s*(?=data: {)", buffer)
+            buffer = json_blocks.pop() if json_blocks else ""
 
-            url = f"{self.chatbot_url}/chat-messages"
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, headers=headers, json=body)
-                return await self._process_stream_response(response)
+            for json_block in json_blocks:
+                if json_block.startswith("data:"):
+                    try:
+                        json_data = json.loads(json_block.replace("data: ", ""))
+                        logger.debug(f"Received JSON data: {json_data}")
 
-        except httpx.RequestError as e:
-            logger.error(f"Error calling chat API: {e}")
-            return None
+                        if json_data.get("event") in ["tts_message_end", "message_end"]:
+                            return {
+                                "final_result": final_result,
+                                "conversation_id": conversation_id,
+                                "message_id": message_id,
+                            }
+
+                        if "answer" in json_data:
+                            final_result += json_data["answer"]
+                        if "conversation_id" in json_data:
+                            conversation_id = json_data["conversation_id"]
+                        if "message_id" in json_data:
+                            message_id = json_data["message_id"]
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Error parsing JSON: {e}")
+
+        # Process any remaining data in buffer
+        if buffer.startswith("data:"):
+            try:
+                json_data = json.loads(buffer.replace("data: ", ""))
+                if "answer" in json_data:
+                    final_result += json_data["answer"]
+                if "conversation_id" in json_data:
+                    conversation_id = json_data["conversation_id"]
+                if "message_id" in json_data:
+                    message_id = json_data["message_id"]
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing remaining JSON: {e}")
+
+        return {
+            "final_result": final_result,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+        }
