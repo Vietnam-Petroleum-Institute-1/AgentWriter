@@ -162,7 +162,6 @@ class ChatService:
                     message_id = json_data["message_id"]
             except json.JSONDecodeError as e:
                 logger.error(f"Error parsing remaining JSON: {e}")
-
         return {
             "final_result": final_result,
             "conversation_id": conversation_id,

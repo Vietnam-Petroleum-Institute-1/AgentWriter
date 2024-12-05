@@ -162,13 +162,19 @@ async def chat_messages(
         bot_message_log = MessageLogCreate(
             notebook_id=file.notebook_id,
             bot_id=bot.bot_id,
-            content=full_bot_response,
+            content=full_bot_response["final_result"],
             from_user=False,
         )
         await chat_service.create_message_log(user_message_log)
         await chat_service.create_message_log(bot_message_log)
+        print(full_bot_response["final_result"])
 
-        return {"message": full_bot_response}
+        return ChatResponse(
+            final_result=full_bot_response["final_result"],
+            conversation_id=full_bot_response["conversation_id"],
+            message_id=full_bot_response["message_id"],
+        )
+
 
     except Exception as e:
         logger.error(f"Error during chat processing: {e}")
