@@ -202,6 +202,8 @@ class ChatService:
                     "user": user_id,
                 }
 
+                print("history: ",history_chat)
+
                 url = f"{self.chatbot_url}/chat-messages"
                 async with httpx.AsyncClient() as client:
                     response = await client.post(url, headers=headers, json=body)
