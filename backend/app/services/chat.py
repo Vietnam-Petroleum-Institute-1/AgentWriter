@@ -111,55 +111,56 @@ class ChatService:
             logger.error(f"Error updating segment: {str(e)}")
             return False, f"Error updating segment: {str(e)}"
 
-async def process_chat_message(
-    self, user_message: str, user_id: str, file_id: str
-) -> Optional[str]:
-    """Process a chat message and return the full response."""
-    file = await self.get_file_by_id(file_id)
-    notebook = await self.get_notebook_by_id(file.notebook_id)
+    async def process_chat_message(
+        self, user_message: str, user_id: str, file_id: str
+    ) -> Optional[str]:
+        """Process a chat message and return the full response."""
+        file = await self.get_file_by_id(file_id)
+        notebook = await self.get_notebook_by_id(file.notebook_id)
 
-    try:
-        result = await self.get_chat_history(
-            notebook_id=notebook.notebook_id, skip=0, limit=5
-        )
-        history_chat = []
-        print("Chat History:")
-        for message in result:
-            print(f"Content: {message.content}")
-            print(f"From User: {message.from_user}")
+        try:
+            result = await self.get_chat_history(
+                notebook_id=notebook.notebook_id, skip=0, limit=5
+            )
+            history_chat = []
+            print("Chat History:")
+            for message in result:
+                print(f"Content: {message.content}")
+                print(f"From User: {message.from_user}")
 
-            if message.from_user:
-                history_chat.append({'user': message.content})
-            else:
-                history_chat.append({'bot': message.content})
-            print("-" * 50)  # Separator between messages
+                if message.from_user:
+                    history_chat.append({'user': message.content})
+                else:
+                    history_chat.append({'bot': message.content})
+                print("-" * 50)  # Separator between messages
 
-        headers = {
-            "Authorization": f"Bearer {self.dify_api_key}",
-            "Content-Type": "application/json",
-        }
-        print(history_chat)
+            headers = {
+                "Authorization": f"Bearer {self.dify_api_key}",
+                "Content-Type": "application/json",
+            }
+            print(history_chat)
 
-        body = {
-            "inputs": {"chunk_id": file_id, "history": str(history_chat)},
-            "query": user_message,
-            "response_mode": "block",
-            "conversation_id": "",
-            "user": user_id,
-        }
+            body = {
+                "inputs": {"chunk_id": file_id, "history": str(history_chat)},
+                "query": user_message,
+                "response_mode": "block",
+                "conversation_id": "",
+                "user": user_id,
+            }
 
-        url = f"{self.chatbot_url}/chat-messages"
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, json=body)
-            if response.status_code == 200:
-                json_data = response.json()
-                if "answer" in json_data:
-                    return json_data["answer"]
-            else:
-                raise Exception(f"Failed to get response: {response.status_code}")
-    except Exception as e:
-        logger.error(f"Error processing chat message: {e}")
-        raise
+            url = f"{self.chatbot_url}/chat-messages"
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=body)
+                if response.status_code == 200:
+                    json_data = response.json()
+                    if "answer" in json_data:
+                        return json_data["answer"]
+                else:
+                    raise Exception(f"Failed to get response: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Error processing chat message: {e}")
+            raise
+
 
     async def create_message_log(
         self, message_data: MessageLogCreate
