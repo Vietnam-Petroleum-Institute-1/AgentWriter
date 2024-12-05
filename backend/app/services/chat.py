@@ -113,53 +113,92 @@ class ChatService:
 
     async def process_chat_message(
         self, user_message: str, user_id: str, file_id: str
-    ) -> Optional[str]:
+    ) -> Optional[Dict[str, Any]]:
         """Process a chat message and return the full response."""
         file = await self.get_file_by_id(file_id)
         notebook = await self.get_notebook_by_id(file.notebook_id)
 
         try:
-            result = await self.get_chat_history(
-                notebook_id=notebook.notebook_id, skip=0, limit=5
-            )
-            history_chat = []
-            print("Chat History:")
-            for message in result:
-                print(f"Content: {message.content}")
-                print(f"From User: {message.from_user}")
-
-                if message.from_user:
-                    history_chat.append({'user': message.content})
-                else:
-                    history_chat.append({'bot': message.content})
-                print("-" * 50)  # Separator between messages
-
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
                 "Content-Type": "application/json",
             }
-            print(history_chat)
 
             body = {
-                "inputs": {"chunk_id": file_id, "history": str(history_chat)},
+                "inputs": {"chunk_id": file_id},
                 "query": user_message,
-                "response_mode": "block",
-                "conversation_id": "",
+                "response_mode": "streaming",  # Keep as streaming for now
+                "conversation_id": notebook.conversation_dify_id
+                if notebook.conversation_dify_id
+                else "",
                 "user": user_id,
             }
 
             url = f"{self.chatbot_url}/chat-messages"
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=headers, json=body)
-                if response.status_code == 200:
-                    json_data = response.json()
-                    if "answer" in json_data:
-                        return json_data["answer"]
-                else:
-                    raise Exception(f"Failed to get response: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Error processing chat message: {e}")
-            raise
+                # Await the full response processing
+                result = await self._process_stream_response(response)
+                return result
+
+        except httpx.RequestError as e:
+            logger.error(f"Error calling chat API: {e}")
+            return None
+
+    async def _process_stream_response(
+        self, response: httpx.Response
+    ) -> Dict[str, Any]:
+        """Process streaming response and return the final result."""
+        final_result = ""
+        buffer = ""
+        conversation_id = None
+        message_id = None
+
+        async for chunk in response.aiter_lines():
+            if not chunk:
+                continue
+
+            buffer += chunk
+            json_blocks = re.split(r"(?<=\})\s*(?=data: {)", buffer)
+            buffer = json_blocks.pop() if json_blocks else ""
+
+            for json_block in json_blocks:
+                if json_block.startswith("data:"):
+                    try:
+                        json_data = json.loads(json_block.replace("data: ", ""))
+                        logger.debug(f"Received JSON data: {json_data}")
+
+                        # Append 'answer' content to final_result
+                        if "answer" in json_data:
+                            final_result += json_data["answer"]
+                        # Update conversation_id and message_id if present
+                        if "conversation_id" in json_data:
+                            conversation_id = json_data["conversation_id"]
+                        if "message_id" in json_data:
+                            message_id = json_data["message_id"]
+
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Error parsing JSON: {e}")
+
+        # Process any remaining data in buffer after the stream ends
+        if buffer.startswith("data:"):
+            try:
+                json_data = json.loads(buffer.replace("data: ", ""))
+                if "answer" in json_data:
+                    final_result += json_data["answer"]
+                if "conversation_id" in json_data:
+                    conversation_id = json_data["conversation_id"]
+                if "message_id" in json_data:
+                    message_id = json_data["message_id"]
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing remaining JSON: {e}")
+
+        return {
+            "final_result": final_result,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+        }
+
 
     async def create_message_log(
         self, message_data: MessageLogCreate
