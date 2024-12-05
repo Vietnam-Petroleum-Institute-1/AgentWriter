@@ -127,22 +127,9 @@ async def update_segment(
 
 @router.post("/chat_messages", response_model=ChatResponse)
 async def chat_messages(
-    chat_message: ChatMessage = Body(
-        ...,
-        example={
-            "user_message": "What can you tell me about this document?",
-            "file_id": "file-123",
-        },
-    ),
+    chat_message: ChatMessage = Body(...),
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(verify_token),
 ):
-    """
-    Send a message to the chat bot and get a response.
-
-    - **user_message**: The message from the user
-    - **file_id**: ID of the file being discussed
-    """
     chat_service = ChatService(db, settings.CHATBOT_URL, settings.DIFY_API_KEY)
 
     # Get bot for logging
@@ -150,18 +137,42 @@ async def chat_messages(
     if not bot:
         raise HTTPException(status_code=404, detail="Chat bot not found")
 
+    # Get file and notebook info
+    file = await chat_service.get_file_by_id(chat_message.file_id)
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
 
-    # Process chat message
-    result = await chat_service.process_chat_message(
-        chat_message.user_message,
-        user_id,
-        chat_message.file_id,
+    # Log user message
+    user_message_log = MessageLogCreate(
+        notebook_id=file.notebook_id,
+        bot_id=bot.bot_id,
+        content=chat_message.user_message,
+        from_user=True,
     )
 
-    if not result:
-        raise HTTPException(status_code=500, detail="Error processing chat message")
+    try:
+        # Process chat message and get the full response
+        bot_response = await chat_service.process_chat_message(
+            chat_message.user_message,
+            chat_message.user_id,
+            chat_message.file_id,
+        )
 
-    return ChatResponse(**result)
+        # Log bot response
+        bot_message_log = MessageLogCreate(
+            notebook_id=file.notebook_id,
+            bot_id=bot.bot_id,
+            content=bot_response,
+            from_user=False,
+        )
+        await chat_service.create_message_log(user_message_log)
+        await chat_service.create_message_log(bot_message_log)
+
+        return {"answer": bot_response}
+
+    except Exception as e:
+        logger.error(f"Error processing chat message: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process chat message")
 
 @router.post("/chat_history")
 async def get_chat_history(
