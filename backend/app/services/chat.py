@@ -161,7 +161,6 @@ class ChatService:
             logger.error(f"Error processing chat message: {e}")
             raise
 
-
     async def create_message_log(
         self, message_data: MessageLogCreate
     ) -> Optional[MessageLog]:
