@@ -184,7 +184,7 @@ class ChatService:
                     if message.from_user:
                         history_chat.append({'user': message.content})
                     else:
-                        history_chat.append({'bot': message.content})
+                        history_chat.append({'chatbot': message.content})
                 headers = {
                     "Authorization": f"Bearer {self.dify_api_key}",
                     "Content-Type": "application/json",
