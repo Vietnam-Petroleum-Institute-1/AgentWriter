@@ -223,3 +223,36 @@ class ChatService:
             select(File).filter(File.notebook_id == notebook_id)
         )
         return result.scalars().all()
+
+    async def process_chat_message(
+        self, user_message: str, user_id: str, file_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Process a chat message and get response"""
+        file = await self.get_file_by_id(file_id)
+        notebook = await self.get_notebook_by_id(file.notebook_id)
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.dify_api_key}",
+                "Content-Type": "application/json",
+            }
+
+            body = {
+                "inputs": {"chunk_id": file_id},
+                "query": user_message,
+                "response_mode": "streaming",
+                "conversation_id": (
+                    notebook.conversation_dify_id
+                    if notebook.conversation_dify_id
+                    else ""
+                ),
+                "user": user_id,
+            }
+
+            url = f"{self.chatbot_url}/chat-messages"
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=body)
+                return await self._process_stream_response(response)
+
+        except httpx.RequestError as e:
+            logger.error(f"Error calling chat API: {e}")
+            return None
