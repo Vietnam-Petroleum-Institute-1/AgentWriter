@@ -113,69 +113,60 @@ class ChatService:
 
     async def process_chat_message(
         self, user_message: str, user_id: str, file_id: str
-    ) -> Optional[AsyncGenerator[str, None]]:
-        """Process a chat message and stream response chunks."""
+    ) -> Optional[str]:
+        """Process a chat message and return the full response."""
         file = await self.get_file_by_id(file_id)
         notebook = await self.get_notebook_by_id(file.notebook_id)
 
         try:
+            # Fetch chat history
             result = await self.get_chat_history(
                 notebook_id=notebook.notebook_id, skip=0, limit=5
             )
             history_chat = [] 
-            print("Chat History:")
             for message in result:
-                print(f"Content: {message.content}")
-                print(f"From User: {message.from_user}")
-
-                if(message.from_user):
+                if message.from_user:
                     history_chat.append({'user': message.content})
                 else:
                     history_chat.append({'bot': message.content})
-                print("-" * 50)  # Separator between messages
+
             headers = {
                 "Authorization": f"Bearer {self.dify_api_key}",
                 "Content-Type": "application/json",
             }
-            print(history_chat)
 
             body = {
                 "inputs": {"chunk_id": file_id, "history": str(history_chat)},
                 "query": user_message,
                 "response_mode": "streaming",
-                # "conversation_id": (
-                #     notebook.conversation_dify_id
-                #     if notebook.conversation_dify_id
-                #     else ""
-                # ),
-                "conversation_id": (""),
+                "conversation_id": "",
                 "user": user_id,
             }
 
             url = f"{self.chatbot_url}/chat-messages"
+
+            # Make the POST request and process the streaming response
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=headers, json=body)
+                full_response = ""  # Accumulator for the full bot response
+
                 async for line in response.aiter_lines():
-                    line = line.replace("data: ", "")
-                    if line.strip():
+                    line = line.replace("data: ", "").strip()
+                    if line:
                         try:
                             json_data = json.loads(line)
                             logger.debug(f"Received JSON data: {json_data}")
-                        except json.JSONDecodeError as e:
-                            print("Error: Invalid JSON response\n")
-                            continue
-                        
 
-                        # Stream the 'answer' field as it comes in
-                        if "answer" in json_data:
-                            answer = json_data["answer"]
-                            # await asyncio.sleep(0.5)
-                            # yield json.dumps({"answer": answer})
-                            yield answer
+                            if "answer" in json_data:
+                                full_response += json_data["answer"]
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error decoding JSON: {e}")
+                            continue
+            return full_response  # Return the full accumulated response
 
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
-            yield f"Error: {str(e)}\n"
+            return f"Error: {str(e)}"
 
     async def create_message_log(
         self, message_data: MessageLogCreate

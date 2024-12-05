@@ -150,33 +150,29 @@ async def chat_messages(
         from_user=True,
     )
 
-    # Return streaming response with bot message logging
-    async def stream_data():
-        full_bot_response = ""
-        try:
-            async for chunk in chat_service.process_chat_message(
-                chat_message.user_message,
-                chat_message.user_id,
-                chat_message.file_id,
-            ):
-                full_bot_response += chunk
-                yield chunk
 
-            # Log bot response after complete
-            bot_message_log = MessageLogCreate(
-                notebook_id=file.notebook_id,
-                bot_id=bot.bot_id,
-                content=full_bot_response,
-                from_user=False,
-            )
-            await chat_service.create_message_log(user_message_log)
-            await chat_service.create_message_log(bot_message_log)
+    try:
+        full_bot_response = await chat_service.process_chat_message(
+            chat_message.user_message,
+            chat_message.user_id,
+            chat_message.file_id,
+        )
 
-            return {"message": full_bot_response}
+        # Log bot response after complete
+        bot_message_log = MessageLogCreate(
+            notebook_id=file.notebook_id,
+            bot_id=bot.bot_id,
+            content=full_bot_response,
+            from_user=False,
+        )
+        await chat_service.create_message_log(user_message_log)
+        await chat_service.create_message_log(bot_message_log)
 
-        except Exception as e:
-            logger.error(f"Error during chat processing: {e}")
-            raise HTTPException(status_code=500, detail="Error processing chat message")
+        return {"message": full_bot_response}
+
+    except Exception as e:
+        logger.error(f"Error during chat processing: {e}")
+        raise HTTPException(status_code=500, detail="Error processing chat message")
 
 
 @router.post("/chat_history")
